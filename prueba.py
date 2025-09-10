@@ -1070,7 +1070,8 @@ async def validar_factura(req: Peticion):
                 "riesgo": riesgo,
                 "pdfFacturaJsonB64": pdf_fields_b64,
                 "respuesta": raw,
-                "claveAccesoDetectada": clave
+                "claveAccesoDetectada": clave,
+                "textoAnalizado": fuente_texto
             }
         )
 
@@ -1226,7 +1227,8 @@ async def validar_factura(req: Peticion):
             "pdfFacturaJsonB64": pdf_fields_b64,
             "factura": sri_json,
             "respuesta": raw,
-            "claveAccesoDetectada": clave
+            "claveAccesoDetectada": clave,
+            "textoAnalizado": fuente_texto
         },
     )
 
