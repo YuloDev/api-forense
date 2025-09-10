@@ -1,0 +1,29 @@
+# requirements.txt para prueba.py (FastAPI + OCR + PDF + SRI)
+
+fastapi==0.116.1
+uvicorn==0.35.0
+
+# PDF parsing
+pdfminer.six==20250506
+PyMuPDF==1.26.4
+Pillow==11.3.0
+
+# OCR
+easyocr==1.7.2
+torch==2.8.0
+torchvision==0.23.0
+numpy==2.2.6
+opencv-python-headless==4.12.0.88
+python-bidi==0.6.6
+
+# SRI SOAP client
+zeep==4.3.1
+requests==2.32.5
+lxml==6.0.1
+isodate==0.7.2
+requests-toolbelt==1.0.0
+requests-file==2.1.0
+
+# Utilidades varias
+pydantic==2.11.7
+typing_extensions==4.15.0
