@@ -11,9 +11,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
     libjpeg62-turbo \
     zlib1g \
-    freetype6 \
+    libfreetype6 \
     libharfbuzz0b \
   && rm -rf /var/lib/apt/lists/*
+
 
 RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel
 
