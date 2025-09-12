@@ -21,16 +21,15 @@ RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel
 WORKDIR /app
 
 # Instalar dependencias primero para aprovechar cache
-COPY requirements.txt ./requirements.txt
+COPY requerimientos.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copiar toda la aplicación (ya que todo está en raíz)
+# Copiar toda la aplicación (ya que está en raíz)
 COPY . .
 
 # Variables por defecto (puedes sobreescribir con -e)
 ENV UVICORN_HOST=0.0.0.0 \
     UVICORN_PORT=8000 \
-    # Ajustes de la app
     EASYOCR_GPU=false \
     EASYOCR_LANGS=es,en \
     RENDER_DPI=250 \
@@ -45,5 +44,5 @@ EXPOSE 8000
 RUN useradd -ms /bin/bash appuser && chown -R appuser /app
 USER appuser
 
-# Comando de arranque
-CMD ["python", "main.py"]
+# Comando de arranque con Uvicorn
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
