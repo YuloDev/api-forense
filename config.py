@@ -1,4 +1,5 @@
 import os
+import json   
 
 # --------------------------- CONFIG ----------------------------------
 SRI_WSDL = "https://cel.sri.gob.ec/comprobantes-electronicos-ws/AutorizacionComprobantesOffline?wsdl"
@@ -15,28 +16,32 @@ PRICE_EPS = float(os.getenv("CMP_PRICE_EPS", "0.01"))
 TOTAL_EPS = float(os.getenv("CMP_TOTAL_EPS", "0.02"))
 MATCH_THRESHOLD = float(os.getenv("CMP_MATCH_THRESHOLD", "0.60"))
 
-# Umbrales / pesos para RIESGO (ajustables)
-RISK_WEIGHTS = {
-    # PRIORITARIAS
-    "fecha_creacion_vs_emision": 15,
-    "fecha_mod_vs_creacion": 12,
-    "software_conocido": 12,
-    "num_paginas": 10,
-    "capas_multiples": 10,
-    # SECUNDARIAS
-    "consistencia_fuentes": 8,
-    "dpi_uniforme": 8,
-    "compresion_estandar": 6,
-    "alineacion_texto": 6,
-    "tamano_esperado": 6,
-    # ADICIONALES
-    "anotaciones_o_formularios": 3,
-    "javascript_embebido": 2,
-    "archivos_incrustados": 3,
-    "firmas_pdf": -4,
-    "actualizaciones_incrementales": 3,
-    "cifrado_permisos_extra": 2,
-}
+CONFIG_FILE = "risk_weights.json"
+
+# cargar desde json si existe
+if os.path.exists(CONFIG_FILE):
+    with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+        RISK_WEIGHTS = json.load(f)
+else:
+    RISK_WEIGHTS = {
+        "fecha_creacion_vs_emision": 15,
+        "fecha_mod_vs_creacion": 12,
+        "software_conocido": 12,
+        "num_paginas": 10,
+        "capas_multiples": 10,
+        "consistencia_fuentes": 8,
+        "dpi_uniforme": 8,
+        "compresion_estandar": 6,
+        "alineacion_texto": 6,
+        "tamano_esperado": 6,
+        "anotaciones_o_formularios": 3,
+        "javascript_embebido": 2,
+        "archivos_incrustados": 3,
+        "firmas_pdf": -4,
+        "actualizaciones_incrementales": 3,
+        "cifrado_permisos_extra": 2,
+    }
+    
 RISK_LEVELS = {"bajo": (0, 29), "medio": (30, 59), "alto": (60, 100)}
 
 # Heurística fechas
