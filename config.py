@@ -42,7 +42,15 @@ else:
         "cifrado_permisos_extra": 2,
     }
     
-RISK_LEVELS = {"bajo": (0, 29), "medio": (30, 59), "alto": (60, 100)}
+# Cargar RISK_LEVELS (con persistencia)
+RISK_LEVELS_FILE = "risk_levels_config.json"
+if os.path.exists(RISK_LEVELS_FILE):
+    with open(RISK_LEVELS_FILE, "r", encoding="utf-8") as f:
+        risk_levels_data = json.load(f)
+        # Convertir listas a tuplas
+        RISK_LEVELS = {k: tuple(v) if isinstance(v, list) else v for k, v in risk_levels_data.items()}
+else:
+    RISK_LEVELS = {"bajo": (0, 29), "medio": (30, 59), "alto": (60, 100)}
 
 # Heurística fechas
 MAX_DIAS_CREACION_EMISION_OK = int(os.getenv("MAX_DIAS_CREACION_EMISION_OK", "30"))
