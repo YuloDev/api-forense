@@ -17,6 +17,7 @@ TOTAL_EPS = float(os.getenv("CMP_TOTAL_EPS", "0.02"))
 MATCH_THRESHOLD = float(os.getenv("CMP_MATCH_THRESHOLD", "0.60"))
 
 CONFIG_FILE = "risk_weights.json"
+DESCRIPTIONS_FILE = "risk_weights_descriptions.json"
 
 # cargar desde json si existe
 if os.path.exists(CONFIG_FILE):
@@ -40,6 +41,95 @@ else:
         "firmas_pdf": -4,
         "actualizaciones_incrementales": 3,
         "cifrado_permisos_extra": 2,
+    }
+
+# Cargar descripciones de RISK_WEIGHTS
+if os.path.exists(DESCRIPTIONS_FILE):
+    with open(DESCRIPTIONS_FILE, "r", encoding="utf-8") as f:
+        RISK_WEIGHTS_DESCRIPTIONS = json.load(f)
+else:
+    # Descripciones por defecto si no existe el archivo
+    RISK_WEIGHTS_DESCRIPTIONS = {
+        "fecha_creacion_vs_emision": {
+            "valor": 15,
+            "descripcion": "Diferencia entre la fecha de creación del PDF y la fecha de emisión del documento",
+            "explicacion": "Un documento legítimo debería crearse cerca de su fecha de emisión. Diferencias grandes pueden indicar manipulación."
+        },
+        "fecha_mod_vs_creacion": {
+            "valor": 12,
+            "descripcion": "Diferencia entre la fecha de modificación y creación del PDF",
+            "explicacion": "Modificaciones posteriores a la creación pueden sugerir alteraciones del documento original."
+        },
+        "software_conocido": {
+            "valor": 12,
+            "descripcion": "Uso de software conocido y confiable para crear el PDF",
+            "explicacion": "Documentos creados con software desconocido o poco común pueden ser sospechosos."
+        },
+        "num_paginas": {
+            "valor": 10,
+            "descripcion": "Número de páginas esperado para el tipo de documento",
+            "explicacion": "Facturas típicamente tienen una página. Múltiples páginas pueden indicar manipulación."
+        },
+        "capas_multiples": {
+            "valor": 10,
+            "descripcion": "Presencia de capas múltiples (OCG) en el PDF",
+            "explicacion": "Las capas pueden usarse para ocultar o superponer información, común en documentos manipulados."
+        },
+        "consistencia_fuentes": {
+            "valor": 8,
+            "descripcion": "Consistencia en el uso de fuentes tipográficas",
+            "explicacion": "Mezcla excesiva de fuentes puede indicar que el documento fue compuesto de múltiples fuentes."
+        },
+        "dpi_uniforme": {
+            "valor": 8,
+            "descripcion": "Uniformidad en la resolución (DPI) de las imágenes",
+            "explicacion": "Resoluciones muy diferentes pueden indicar inserción de imágenes de distintas fuentes."
+        },
+        "compresion_estandar": {
+            "valor": 6,
+            "descripcion": "Uso de métodos de compresión estándar",
+            "explicacion": "Métodos de compresión inusuales pueden indicar manipulación o generación no estándar."
+        },
+        "alineacion_texto": {
+            "valor": 6,
+            "descripcion": "Alineación correcta de elementos de texto",
+            "explicacion": "Texto mal alineado o con rotaciones extrañas puede indicar manipulación digital."
+        },
+        "tamano_esperado": {
+            "valor": 6,
+            "descripcion": "Tamaño de archivo apropiado para el tipo de documento",
+            "explicacion": "Archivos muy grandes o pequeños para su contenido pueden ser sospechosos."
+        },
+        "anotaciones_o_formularios": {
+            "valor": 3,
+            "descripcion": "Presencia de anotaciones o campos de formulario",
+            "explicacion": "Elementos interactivos en documentos oficiales pueden facilitar la manipulación."
+        },
+        "javascript_embebido": {
+            "valor": 2,
+            "descripcion": "Código JavaScript embebido en el PDF",
+            "explicacion": "JavaScript en documentos oficiales es inusual y puede usarse para ocultar contenido."
+        },
+        "archivos_incrustados": {
+            "valor": 3,
+            "descripcion": "Archivos adjuntos o incrustados en el PDF",
+            "explicacion": "Archivos ocultos dentro del PDF pueden contener información maliciosa o no autorizada."
+        },
+        "firmas_pdf": {
+            "valor": -4,
+            "descripcion": "Presencia de firmas digitales válidas",
+            "explicacion": "Las firmas digitales aumentan la confiabilidad del documento (reduce el riesgo)."
+        },
+        "actualizaciones_incrementales": {
+            "valor": 3,
+            "descripcion": "Múltiples actualizaciones incrementales del PDF",
+            "explicacion": "Muchas modificaciones pueden indicar alteraciones sucesivas del documento original."
+        },
+        "cifrado_permisos_extra": {
+            "valor": 2,
+            "descripcion": "Cifrado o permisos especiales aplicados",
+            "explicacion": "Restricciones inusuales pueden usarse para ocultar el método de creación del documento."
+        }
     }
     
 # Cargar RISK_LEVELS (con persistencia)
