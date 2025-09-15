@@ -475,7 +475,6 @@ def evaluar_riesgo(pdf_bytes: bytes, fuente_texto: str, pdf_fields: Dict[str, An
         "paginas": pages,
         "escaneado_aprox": scanned,
         "imagenes": img_info,
-        "es_falso": es_falso
     }
 
 
