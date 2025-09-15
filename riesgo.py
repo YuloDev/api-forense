@@ -2,6 +2,8 @@ import re
 import statistics
 from datetime import datetime, date
 from typing import Dict, Any, List, Tuple, Optional
+from collections import Counter
+from difflib import SequenceMatcher
 
 import fitz  # PyMuPDF
 
@@ -58,11 +60,251 @@ def _parse_fecha_emision(s: Optional[str]) -> Optional[date]:
         return None
 
 
-def _detect_layers(pdf_bytes: bytes) -> bool:
-    """Heurística: busca OCG / OCProperties en bytes."""
-    sample = pdf_bytes[: min(4_000_000, len(pdf_bytes))]
-    return (b"/OCGs" in sample) or (b"/OCProperties" in sample) or re.search(rb"/OC\s", sample) is not None
+# ==================== DETECCIÓN AVANZADA DE CAPAS ====================
 
+def _detect_layers_advanced(pdf_bytes: bytes) -> Dict[str, Any]:
+    """
+    Detección avanzada de capas múltiples con múltiples heurísticas.
+    Retorna un diccionario con el análisis detallado.
+    """
+    result = {
+        "has_layers": False,
+        "confidence": 0.0,
+        "indicators": [],
+        "layer_count_estimate": 0,
+        "ocg_objects": 0,
+        "suspicious_patterns": []
+    }
+    
+    sample_size = min(6_000_000, len(pdf_bytes))
+    sample = pdf_bytes[:sample_size]
+    
+    # 1. Detección básica de OCG (Optional Content Groups)
+    ocg_patterns = [
+        rb"/OCGs",
+        rb"/OCProperties", 
+        rb"/OC\s",
+        rb"/ON\s+\[",
+        rb"/OFF\s+\[",
+        rb"/Order\s+\[",
+        rb"/RBGroups",
+        rb"/Locked\s+\["
+    ]
+    
+    ocg_count = 0
+    for pattern in ocg_patterns:
+        matches = len(re.findall(pattern, sample))
+        if matches > 0:
+            ocg_count += matches
+            result["indicators"].append(f"Patrón OCG encontrado: {pattern.decode('utf-8', errors='ignore')} ({matches} veces)")
+    
+    result["ocg_objects"] = ocg_count
+    
+    # 2. Detección de objetos superpuestos
+    overlay_patterns = [
+        rb"/Type\s*/XObject",
+        rb"/Subtype\s*/Form",
+        rb"/Group\s*<<",
+        rb"/S\s*/Transparency"
+    ]
+    
+    overlay_count = 0
+    for pattern in overlay_patterns:
+        matches = len(re.findall(pattern, sample))
+        overlay_count += matches
+    
+    if overlay_count > 3:  # Umbral para objetos superpuestos
+        result["indicators"].append(f"Objetos superpuestos detectados: {overlay_count}")
+    
+    # 3. Análisis de múltiples streams de contenido
+    content_streams = len(re.findall(rb"stream\s", sample))
+    if content_streams > 5:  # Para un PDF de 1 página, muchos streams pueden ser sospechosos
+        result["indicators"].append(f"Múltiples content streams: {content_streams}")
+    
+    # 4. Detección de transformaciones de matriz sospechosas
+    matrix_patterns = [
+        rb"q\s+[\d\.\-\s]+cm",  # transformaciones de matriz
+        rb"\d+\.\d+\s+\d+\.\d+\s+\d+\.\d+\s+\d+\.\d+\s+\d+\.\d+\s+\d+\.\d+\s+cm"
+    ]
+    
+    matrix_count = 0
+    for pattern in matrix_patterns:
+        matches = len(re.findall(pattern, sample))
+        matrix_count += matches
+    
+    if matrix_count > 10:  # Muchas transformaciones pueden indicar capas
+        result["indicators"].append(f"Transformaciones de matriz excesivas: {matrix_count}")
+    
+    # 5. Estimación de confianza
+    confidence = 0.0
+    if ocg_count > 0:
+        confidence += 0.8  # OCG es el indicador más fuerte
+    if overlay_count > 3:
+        confidence += 0.4
+    if content_streams > 5:
+        confidence += 0.2
+    if matrix_count > 10:
+        confidence += 0.3
+    
+    confidence = min(1.0, confidence)
+    result["confidence"] = round(confidence, 3)
+    result["has_layers"] = confidence >= 0.5
+    
+    # 6. Estimación del número de capas
+    if ocg_count > 0:
+        result["layer_count_estimate"] = min(ocg_count // 2, 10)  # Estimación conservadora
+    
+    return result
+
+
+def _detect_text_overlapping(extracted_text: str) -> Dict[str, Any]:
+    """
+    Analiza el texto extraído para detectar superposiciones y duplicaciones
+    que pueden indicar capas múltiples.
+    """
+    if not extracted_text:
+        return {"has_overlapping": False, "patterns": []}
+    
+    lines = [line.strip() for line in extracted_text.split('\n') if line.strip()]
+    
+    result = {
+        "has_overlapping": False,
+        "patterns": [],
+        "duplicate_lines": {},
+        "similar_lines": [],
+        "suspicious_formatting": []
+    }
+    
+    # 1. Detectar líneas duplicadas exactas
+    line_counts = Counter(lines)
+    duplicates = {line: count for line, count in line_counts.items() if count > 1}
+    
+    if duplicates:
+        result["duplicate_lines"] = duplicates
+        result["patterns"].append(f"Líneas duplicadas encontradas: {len(duplicates)}")
+        result["has_overlapping"] = True
+    
+    # 2. Detectar líneas muy similares (posibles superposiciones)
+    similar_pairs = []
+    for i, line1 in enumerate(lines):
+        for j, line2 in enumerate(lines[i+1:], i+1):
+            similarity = SequenceMatcher(None, line1, line2).ratio()
+            if 0.7 <= similarity < 1.0:  # Muy similar pero no idéntica
+                similar_pairs.append((line1, line2, similarity))
+    
+    if similar_pairs:
+        result["similar_lines"] = similar_pairs[:10]  # Limitar a 10 ejemplos
+        result["patterns"].append(f"Líneas similares encontradas: {len(similar_pairs)}")
+        result["has_overlapping"] = True
+    
+    # 3. Detectar patrones de formato sospechosos
+    suspicious_patterns = []
+    
+    for line in lines:
+        # Texto con palabras pegadas sin espacios apropiados
+        if re.search(r'[A-ZÁÉÍÓÚ]+[a-záéíóú]+[A-ZÁÉÍÓÚ]+', line):
+            suspicious_patterns.append(f"Formato sospechoso: {line}")
+        
+        # Mezcla extraña de mayúsculas y minúsculas
+        words = line.split()
+        for word in words:
+            if re.match(r'^[A-Z]+[a-z]+[A-Z]+', word) and len(word) > 6:
+                suspicious_patterns.append(f"Patrón de caso sospechoso: {word}")
+    
+    if suspicious_patterns:
+        result["suspicious_formatting"] = suspicious_patterns[:5]  # Limitar ejemplos
+        result["patterns"].append(f"Formatos sospechosos: {len(suspicious_patterns)}")
+        result["has_overlapping"] = True
+    
+    return result
+
+
+def _analyze_pdf_structure_layers(doc: fitz.Document) -> Dict[str, Any]:
+    """
+    Analiza la estructura interna del PDF para detectar indicios de capas múltiples.
+    """
+    result = {
+        "suspicious_structure": False,
+        "details": [],
+        "object_analysis": {},
+        "content_analysis": {}
+    }
+    
+    try:
+        total_objects = 0
+        form_objects = 0
+        transparency_objects = 0
+        
+        # Analizar cada página
+        for page_num in range(doc.page_count):
+            page = doc.load_page(page_num)
+            
+            # Obtener objetos de la página
+            try:
+                drawings = page.get_drawings()
+                images = page.get_images()
+                text_dict = page.get_text("dict")
+                
+                # Contar objetos por página
+                page_objects = len(drawings) + len(images) + len(text_dict.get('blocks', []))
+                total_objects += page_objects
+                
+                # Analizar bloques de texto para detectar superposiciones
+                blocks = text_dict.get('blocks', [])
+                overlapping_blocks = 0
+                
+                for i, block1 in enumerate(blocks):
+                    if block1.get('type') != 0:  # Solo bloques de texto
+                        continue
+                    bbox1 = block1.get('bbox')
+                    if not bbox1:
+                        continue
+                    
+                    for j, block2 in enumerate(blocks[i+1:], i+1):
+                        if block2.get('type') != 0:
+                            continue
+                        bbox2 = block2.get('bbox')
+                        if not bbox2:
+                            continue
+                        
+                        # Verificar si los bounding boxes se superponen
+                        if (bbox1[0] < bbox2[2] and bbox1[2] > bbox2[0] and 
+                            bbox1[1] < bbox2[3] and bbox1[3] > bbox2[1]):
+                            overlapping_blocks += 1
+                
+                if overlapping_blocks > 2:  # Umbral para superposiciones sospechosas
+                    result["details"].append(f"Página {page_num + 1}: {overlapping_blocks} bloques superpuestos")
+                    result["suspicious_structure"] = True
+                
+            except Exception as e:
+                result["details"].append(f"Error analizando página {page_num + 1}: {str(e)}")
+        
+        # Análisis global
+        result["object_analysis"] = {
+            "total_objects": total_objects,
+            "objects_per_page": total_objects / max(1, doc.page_count),
+            "form_objects": form_objects,
+            "transparency_objects": transparency_objects
+        }
+        
+        # Si hay demasiados objetos por página, puede ser sospechoso
+        if total_objects / max(1, doc.page_count) > 50:
+            result["details"].append(f"Exceso de objetos por página: {total_objects / doc.page_count:.1f}")
+            result["suspicious_structure"] = True
+            
+    except Exception as e:
+        result["details"].append(f"Error en análisis estructural: {str(e)}")
+    
+    return result
+
+
+def _detect_layers(pdf_bytes: bytes) -> bool:
+    """Función simplificada que mantiene la compatibilidad con el código existente."""
+    advanced_result = _detect_layers_advanced(pdf_bytes)
+    return advanced_result["has_layers"]
+
+
+# ================= FUNCIONES AUXILIARES EXISTENTES =================
 
 def _count_incremental_updates(pdf_bytes: bytes) -> int:
     """Número de 'startxref' → 1 = normal, >1 = actualizaciones incrementales."""
@@ -259,6 +501,11 @@ def evaluar_riesgo(pdf_bytes: bytes, fuente_texto: str, pdf_fields: Dict[str, An
     size_bytes = len(pdf_bytes)
     scanned = _is_scanned_image_pdf(pdf_bytes, fuente_texto or "")
 
+    # --- ANÁLISIS AVANZADO DE CAPAS ---
+    layers_analysis = _detect_layers_advanced(pdf_bytes)
+    text_overlapping = _detect_text_overlapping(fuente_texto or "")
+    structure_analysis = _analyze_pdf_structure_layers(doc)
+
     # --- fechas ---
     fecha_emision = _parse_fecha_emision(pdf_fields.get("fechaEmision"))
     dt_cre = _pdf_date_to_dt(meta.get("creationDate") or meta.get("CreationDate"))
@@ -267,8 +514,8 @@ def evaluar_riesgo(pdf_bytes: bytes, fuente_texto: str, pdf_fields: Dict[str, An
     # --- software ---
     prod_ok = _is_known_producer(meta)
 
-    # --- capas ---
-    has_layers = _detect_layers(pdf_bytes)
+    # --- capas (usando la detección mejorada) ---
+    has_layers = layers_analysis["has_layers"]
 
     # --- fuentes y alineación ---
     all_fonts: List[str] = []
@@ -314,7 +561,7 @@ def evaluar_riesgo(pdf_bytes: bytes, fuente_texto: str, pdf_fields: Dict[str, An
     except Exception:
         is_encrypted = False
 
-    # ===================== SCORING =====================
+    # ===================== SCORING MEJORADO =====================
     score = 0
     details_prior: List[Dict[str, Any]] = []
     details_sec: List[Dict[str, Any]] = []
@@ -361,12 +608,41 @@ def evaluar_riesgo(pdf_bytes: bytes, fuente_texto: str, pdf_fields: Dict[str, An
     details_prior.append({"check": "Número de páginas esperado = 1", "detalle": f"{pages} pág(s)", "penalizacion": penal})
     score += penal
 
-    # 5) Presencia de capas múltiples (OCG)
-    penal = RISK_WEIGHTS["capas_multiples"] if has_layers else 0
-    details_prior.append({"check": "Presencia de capas múltiples", "detalle": has_layers, "penalizacion": penal})
+    # 5) Presencia de capas múltiples (MEJORADO)
+    penal = 0
+    layer_details = {
+        "deteccion_basica": has_layers,
+        "confianza": layers_analysis["confidence"],
+        "indicadores": layers_analysis["indicators"],
+        "objetos_ocg": layers_analysis["ocg_objects"],
+        "superposicion_texto": text_overlapping["has_overlapping"],
+        "estructura_sospechosa": structure_analysis["suspicious_structure"]
+    }
+    
+    if has_layers:
+        # Penalización base por capas
+        penal = RISK_WEIGHTS["capas_multiples"]
+        
+        # Penalización adicional por alta confianza
+        if layers_analysis["confidence"] >= 0.8:
+            penal = int(penal * 1.3)
+        
+        # Penalización adicional por superposición de texto
+        if text_overlapping["has_overlapping"]:
+            penal = int(penal * 1.2)
+        
+        # Penalización adicional por estructura sospechosa
+        if structure_analysis["suspicious_structure"]:
+            penal = int(penal * 1.1)
+    
+    details_prior.append({
+        "check": "Presencia de capas múltiples (análisis avanzado)", 
+        "detalle": layer_details, 
+        "penalizacion": penal
+    })
     score += penal
 
-    # SECUNDARIAS
+    # SECUNDARIAS (continúan igual)
     # Consistencia de fuentes
     penal = 0
     f_det = fonts_info
@@ -445,20 +721,41 @@ def evaluar_riesgo(pdf_bytes: bytes, fuente_texto: str, pdf_fields: Dict[str, An
     details_extra.append({"check": "Cifrado / Permisos", "detalle": {"encriptado": is_encrypted}, "penalizacion": penal})
     score += penal
 
-    # Normalizar score a [0, 100]
+    # NUEVAS VALIDACIONES ESPECÍFICAS PARA CAPAS
+    # Superposición de texto detectada
+    if text_overlapping["has_overlapping"] and not has_layers:
+        # Si hay superposición de texto pero no se detectaron capas OCG, es sospechoso
+        penal = int(RISK_WEIGHTS.get("capas_multiples", 15) * 0.5)
+        details_extra.append({
+            "check": "Superposición de texto sin capas OCG", 
+            "detalle": text_overlapping["patterns"], 
+            "penalizacion": penal
+        })
+        score += penal
 
-    es_falso = False
-    if has_layers:
-        es_falso = True
-    if dt_cre and dt_mod and dt_cre != dt_mod:
-        es_falso = True
+    # Estructura sospechosa sin otras indicaciones
+    if structure_analysis["suspicious_structure"] and not has_layers and not text_overlapping["has_overlapping"]:
+        penal = int(RISK_WEIGHTS.get("capas_multiples", 15) * 0.3)
+        details_extra.append({
+            "check": "Estructura PDF sospechosa", 
+            "detalle": structure_analysis["details"], 
+            "penalizacion": penal
+        })
+        score += penal
+
+    # Normalizar score a [0, 100]
     score = max(0, min(100, score))
 
-    nivel = "bajo"
-    for k, (lo, hi) in RISK_WEIGHTS and RISK_LEVELS.items():  # type: ignore
-        # (truco mypy: RISK_WEIGHTS siempre es truthy; realmente iteramos RISK_LEVELS)
-        pass  # sólo para silenciar linter si lo usas
+    # Determinar si es falso (indicadores fuertes)
+    es_falso = False
+    if has_layers and layers_analysis["confidence"] >= 0.7:
+        es_falso = True
+    if dt_cre and dt_mod and dt_cre != dt_mod and abs((dt_mod - dt_cre).days) > 1:
+        es_falso = True
+    if text_overlapping["has_overlapping"] and len(text_overlapping.get("duplicate_lines", {})) > 2:
+        es_falso = True
 
+    # Determinar nivel de riesgo
     nivel = "bajo"
     for k, (lo, hi) in RISK_LEVELS.items():
         if lo <= score <= hi:
@@ -468,6 +765,7 @@ def evaluar_riesgo(pdf_bytes: bytes, fuente_texto: str, pdf_fields: Dict[str, An
     return {
         "score": score,
         "nivel": nivel,
+        "es_falso_probable": es_falso,
         "prioritarias": details_prior,
         "secundarias": details_sec,
         "adicionales": details_extra,
@@ -475,6 +773,11 @@ def evaluar_riesgo(pdf_bytes: bytes, fuente_texto: str, pdf_fields: Dict[str, An
         "paginas": pages,
         "escaneado_aprox": scanned,
         "imagenes": img_info,
+        "analisis_capas": {
+            "deteccion_avanzada": layers_analysis,
+            "superposicion_texto": text_overlapping,
+            "estructura_pdf": structure_analysis
+        }
     }
 
 
@@ -500,3 +803,111 @@ def evaluar_riesgo_factura(pdf_bytes: bytes, fuente_texto: str, pdf_fields: Dict
             break
 
     return base
+
+
+# ==================== FUNCIONES AUXILIARES PARA ANÁLISIS ====================
+
+def generar_reporte_capas(layers_analysis: Dict[str, Any], text_overlapping: Dict[str, Any], 
+                         structure_analysis: Dict[str, Any]) -> str:
+    """
+    Genera un reporte legible del análisis de capas múltiples.
+    """
+    reporte = []
+    reporte.append("=== REPORTE DE ANÁLISIS DE CAPAS MÚLTIPLES ===\n")
+    
+    # Análisis principal
+    if layers_analysis["has_layers"]:
+        reporte.append(f"🔴 CAPAS DETECTADAS (Confianza: {layers_analysis['confidence']:.1%})")
+        reporte.append(f"   Objetos OCG encontrados: {layers_analysis['ocg_objects']}")
+        reporte.append(f"   Estimación de capas: {layers_analysis['layer_count_estimate']}")
+        
+        if layers_analysis["indicators"]:
+            reporte.append("   Indicadores técnicos:")
+            for indicator in layers_analysis["indicators"]:
+                reporte.append(f"   - {indicator}")
+    else:
+        reporte.append("✅ No se detectaron capas OCG estándar")
+    
+    reporte.append("")
+    
+    # Análisis de texto
+    if text_overlapping["has_overlapping"]:
+        reporte.append("🟡 SUPERPOSICIÓN DE TEXTO DETECTADA:")
+        
+        if text_overlapping["duplicate_lines"]:
+            reporte.append(f"   Líneas duplicadas: {len(text_overlapping['duplicate_lines'])}")
+            for line, count in list(text_overlapping["duplicate_lines"].items())[:3]:
+                reporte.append(f"   - '{line[:50]}...' aparece {count} veces")
+        
+        if text_overlapping["similar_lines"]:
+            reporte.append(f"   Líneas similares: {len(text_overlapping['similar_lines'])}")
+            for line1, line2, sim in text_overlapping["similar_lines"][:2]:
+                reporte.append(f"   - Similitud {sim:.1%}: '{line1[:30]}...' ≈ '{line2[:30]}...'")
+        
+        if text_overlapping["suspicious_formatting"]:
+            reporte.append("   Formato sospechoso detectado:")
+            for fmt in text_overlapping["suspicious_formatting"][:3]:
+                reporte.append(f"   - {fmt}")
+    else:
+        reporte.append("✅ No se detectó superposición de texto")
+    
+    reporte.append("")
+    
+    # Análisis estructural
+    if structure_analysis["suspicious_structure"]:
+        reporte.append("🟡 ESTRUCTURA PDF SOSPECHOSA:")
+        for detail in structure_analysis["details"]:
+            reporte.append(f"   - {detail}")
+    else:
+        reporte.append("✅ Estructura PDF normal")
+    
+    return "\n".join(reporte)
+
+
+def detectar_capas_standalone(pdf_path: str) -> Dict[str, Any]:
+    """
+    Función standalone para detectar capas en un PDF específico.
+    Útil para testing y análisis independiente.
+    """
+    try:
+        with open(pdf_path, 'rb') as f:
+            pdf_bytes = f.read()
+        
+        doc = fitz.open(pdf_path)
+        extracted_text = ""
+        for page in doc:
+            extracted_text += page.get_text() + "\n"
+        doc.close()
+        
+        # Ejecutar análisis
+        layers_analysis = _detect_layers_advanced(pdf_bytes)
+        text_overlapping = _detect_text_overlapping(extracted_text)
+        
+        doc = fitz.open(pdf_path)
+        structure_analysis = _analyze_pdf_structure_layers(doc)
+        doc.close()
+        
+        # Generar reporte
+        reporte = generar_reporte_capas(layers_analysis, text_overlapping, structure_analysis)
+        
+        return {
+            "archivo": pdf_path,
+            "tiene_capas": layers_analysis["has_layers"],
+            "confianza_total": layers_analysis["confidence"],
+            "tiene_superposicion_texto": text_overlapping["has_overlapping"],
+            "estructura_sospechosa": structure_analysis["suspicious_structure"],
+            "analisis_detallado": {
+                "capas": layers_analysis,
+                "texto": text_overlapping,
+                "estructura": structure_analysis
+            },
+            "reporte": reporte
+        }
+        
+    except Exception as e:
+        return {
+            "archivo": pdf_path,
+            "error": str(e),
+            "tiene_capas": False,
+            "confianza_total": 0.0
+        }
