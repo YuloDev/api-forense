@@ -1,0 +1,19 @@
+{
+  "fecha_creacion_vs_emision": 15,
+  "fecha_mod_vs_creacion": 12,
+  "software_conocido": 12,
+  "num_paginas": 10,
+  "capas_multiples": 10,
+  "consistencia_fuentes": 8,
+  "dpi_uniforme": 8,
+  "compresion_estandar": 6,
+  "alineacion_texto": 6,
+  "tamano_esperado": 6,
+  "anotaciones_o_formularios": 3,
+  "javascript_embebido": 2,
+  "archivos_incrustados": 3,
+  "firmas_pdf": -4,
+  "actualizaciones_incrementales": 3,
+  "cifrado_permisos_extra": 2,
+  "sri_verificacion": 20 
+}
