@@ -24,7 +24,7 @@ from utils import log_step, normalize_comprobante_xml, strip_accents, _to_float
 from pdf_extract import extract_clave_acceso_from_text, extract_invoice_fields_from_text
 from ocr import easyocr_text_from_pdf, HAS_EASYOCR
 from sri import sri_autorizacion_por_clave, parse_autorizacion_response, factura_xml_to_json
-from riesgo import evaluar_riesgo
+from riesgo import evaluar_riesgo_factura
 
 import fitz  # para chequeo de PDF escaneado
 
@@ -89,9 +89,9 @@ async def validar_factura(req: Peticion):
     pdf_fields = extract_invoice_fields_from_text(fuente_texto or "", clave)
     pdf_fields_b64 = base64.b64encode(json.dumps(pdf_fields, ensure_ascii=False).encode("utf-8")).decode("utf-8")
 
-    # Si no hay clave válida → ejecutar riesgo
+    # Si no hay clave válida → ejecutar riesgo con sri_ok=False
     if not etiqueta_encontrada or not clave or not re.fullmatch(r"\d{49}", str(clave)):
-        riesgo = evaluar_riesgo(pdf_bytes, fuente_texto or "", pdf_fields)
+        riesgo = evaluar_riesgo_factura(pdf_bytes, fuente_texto or "", pdf_fields, sri_ok=False)
         log_step("TOTAL (RIESGO sin clave)", t_all)
         return JSONResponse(
             status_code=200,
@@ -109,7 +109,7 @@ async def validar_factura(req: Peticion):
     try:
         resp = sri_autorizacion_por_clave(clave, timeout=SRI_TIMEOUT)
     except requests.exceptions.Timeout:
-        riesgo = evaluar_riesgo(pdf_bytes, fuente_texto or "", pdf_fields)
+        riesgo = evaluar_riesgo_factura(pdf_bytes, fuente_texto or "", pdf_fields, sri_ok=False)
         return JSONResponse(
             status_code=200,
             content={
@@ -121,7 +121,7 @@ async def validar_factura(req: Peticion):
             }
         )
     except Exception as e:
-        riesgo = evaluar_riesgo(pdf_bytes, fuente_texto or "", pdf_fields)
+        riesgo = evaluar_riesgo_factura(pdf_bytes, fuente_texto or "", pdf_fields, sri_ok=False)
         return JSONResponse(
             status_code=200,
             content={
@@ -136,7 +136,7 @@ async def validar_factura(req: Peticion):
 
     ok_aut, estado, xml_comprobante, raw = parse_autorizacion_response(resp)
     if not ok_aut:
-        riesgo = evaluar_riesgo(pdf_bytes, fuente_texto or "", pdf_fields)
+        riesgo = evaluar_riesgo_factura(pdf_bytes, fuente_texto or "", pdf_fields, sri_ok=False)
         return JSONResponse(
             status_code=200,
             content={
@@ -156,7 +156,7 @@ async def validar_factura(req: Peticion):
     try:
         sri_json = factura_xml_to_json(xml_src)
     except Exception as e:
-        riesgo = evaluar_riesgo(pdf_bytes, fuente_texto or "", pdf_fields)
+        riesgo = evaluar_riesgo_factura(pdf_bytes, fuente_texto or "", pdf_fields, sri_ok=True)
         return JSONResponse(status_code=200, content={
             "sri_verificado": True,
             "mensaje": "AUTORIZADO en el SRI, pero no se pudo convertir a JSON.",
@@ -273,14 +273,15 @@ async def validar_factura(req: Peticion):
             totales_ok = False
             diferencias["totalItems"] = {"sri": total_sri_items, "pdf": total_pdf_items}
 
-    coincidencia = "si" if (not diferencias and not diferenciasProductos and totales_ok) else "no"
+    coincidencia = (not diferencias and not diferenciasProductos and totales_ok)
+    riesgo = evaluar_riesgo_factura(pdf_bytes, fuente_texto or "", pdf_fields, sri_ok=coincidencia)
 
     return JSONResponse(
         status_code=200,
         content={
             "sri_verificado": True,
             "mensaje": "El comprobante es AUTORIZADO en el SRI.",
-            "coincidencia": coincidencia,
+            "coincidencia": "si" if coincidencia else "no",
             "diferencias": diferencias,
             "diferenciasProductos": diferenciasProductos,
             "resumenProductos": {
@@ -292,6 +293,7 @@ async def validar_factura(req: Peticion):
             "factura": sri_json,
             "respuesta": raw,
             "claveAccesoDetectada": clave,
-            "textoAnalizado": fuente_texto
+            "textoAnalizado": fuente_texto,
+            "riesgo": riesgo
         },
     )

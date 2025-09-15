@@ -14,5 +14,6 @@
   "archivos_incrustados": 3,
   "firmas_pdf": -4,
   "actualizaciones_incrementales": 3,
-  "cifrado_permisos_extra": 2
+  "cifrado_permisos_extra": 2,
+  "sri_verificacion": 20 
 }

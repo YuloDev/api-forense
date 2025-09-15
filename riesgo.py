@@ -475,5 +475,28 @@ def evaluar_riesgo(pdf_bytes: bytes, fuente_texto: str, pdf_fields: Dict[str, An
         "paginas": pages,
         "escaneado_aprox": scanned,
         "imagenes": img_info,
-        "es_falso": es_falso
     }
+
+
+def evaluar_riesgo_factura(pdf_bytes: bytes, fuente_texto: str, pdf_fields: Dict[str, Any], sri_ok: bool) -> Dict[str, Any]:
+    """
+    Igual que evaluar_riesgo, pero si el comprobante SRI no coincide,
+    suma la penalización 'sri_verificacion'.
+    """
+    base = evaluar_riesgo(pdf_bytes, fuente_texto, pdf_fields)
+
+    penal = 0 if sri_ok else RISK_WEIGHTS.get("sri_verificacion", 0)
+    base["score"] = max(0, min(100, base["score"] + penal))
+    base.setdefault("adicionales", []).append({
+        "check": "Verificación contra SRI",
+        "detalle": "Coincidencia" if sri_ok else "No coincide con SRI",
+        "penalizacion": penal
+    })
+
+    # recalcular nivel
+    for k, (lo, hi) in RISK_LEVELS.items():
+        if lo <= base["score"] <= hi:
+            base["nivel"] = k
+            break
+
+    return base
