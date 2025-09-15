@@ -15,5 +15,6 @@
   "firmas_pdf": -4,
   "actualizaciones_incrementales": 3,
   "cifrado_permisos_extra": 2,
+  "math_consistency": 10,
   "sri_verificacion": 20 
 }

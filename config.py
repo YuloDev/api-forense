@@ -41,6 +41,8 @@ else:
         "firmas_pdf": -4,
         "actualizaciones_incrementales": 3,
         "cifrado_permisos_extra": 2,
+        "math_consistency": 10,
+        "sri_verificacion": 20,
     }
 
 # Cargar descripciones de RISK_WEIGHTS
@@ -129,6 +131,16 @@ else:
             "valor": 2,
             "descripcion": "Cifrado o permisos especiales aplicados",
             "explicacion": "Restricciones inusuales pueden usarse para ocultar el método de creación del documento."
+        },
+        "math_consistency": {
+            "valor": 10,
+            "descripcion": "Consistencia aritmética: subtotal + impuestos − descuentos − retenciones = total",
+            "explicacion": "Descuadres contables evidencian manipulación o error."
+        },
+        "sri_verificacion": {
+            "valor": 20,
+            "descripcion": "Verificación exitosa contra el SRI (Servicio de Rentas Internas)",
+            "explicacion": "La capacidad de verificar el documento contra registros oficiales del SRI aumenta significativamente la confiabilidad."
         }
     }
     
