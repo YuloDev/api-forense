@@ -5,11 +5,16 @@ from utils import strip_accents, _to_float
 
 # ------------------ Clave de Acceso (robusto) ------------------------
 DIGITS49_FLEX = r"((?:\d[\s-]*){49})"
+# Patrón más flexible para capturar 49 dígitos con posibles separadores
+DIGITS49_FLEXIBLE = r"(\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d[\s-]*\d)"
+# Patrón simple para 49 dígitos consecutivos o con espacios mínimos
+DIGITS49_SIMPLE = r"(\d{49}|\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2}\s+\d{1,2})"
 
 def _normalize_digits(block: str) -> Optional[str]:
     if not block:
         return None
     only = re.sub(r"\D", "", block)
+    # print(f"[DEBUG] _normalize_digits: '{block}' -> '{only}' (len: {len(only)})")  # Comentado para producción
     return only if len(only) == 49 else None
 
 def _search_after_label(text: str, labels: List[str], window_chars: int = 2000) -> Tuple[Optional[str], bool]:
@@ -17,40 +22,89 @@ def _search_after_label(text: str, labels: List[str], window_chars: int = 2000) 
         for m in re.finditer(label_regex, text, flags=re.I | re.UNICODE):
             start = m.end()
             window = text[start:start + window_chars]
-            m1 = re.search(r"[:\s-]*" + DIGITS49_FLEX, window)
-            if m1:
-                clave = _normalize_digits(m1.group(1))
-                if clave:
-                    return clave, True
-            m2 = re.search(r"[\r\n]+[:\s-]*" + DIGITS49_FLEX, window)
-            if m2:
-                clave = _normalize_digits(m2.group(1))
-                if clave:
-                    return clave, True
+            # print(f"[DEBUG] Label encontrado en posición {m.start()}-{m.end()}, ventana: '{window[:100]}...'")  # Comentado para producción
+            
+            # Probar múltiples patrones
+            patterns = [
+                (DIGITS49_FLEX, "DIGITS49_FLEX"),
+                (DIGITS49_SIMPLE, "DIGITS49_SIMPLE"),
+                (r"(\d{49})", "DIGITS49_CONSECUTIVE"),
+                (r"(\d+(?:\s+\d+)*)", "DIGITS_WITH_SPACES")
+            ]
+            
+            for pattern, pattern_name in patterns:
+                # Buscar inmediatamente después del label
+                m1 = re.search(r"[:\s-]*" + pattern, window)
+                if m1:
+                    # print(f"[DEBUG] Patrón {pattern_name} encontrado: '{m1.group(1)}'")  # Comentado para producción
+                    clave = _normalize_digits(m1.group(1))
+                    if clave:
+                        return clave, True
+                
+                # Buscar en nueva línea
+                m2 = re.search(r"[\r\n]+[:\s-]*" + pattern, window)
+                if m2:
+                    # print(f"[DEBUG] Patrón {pattern_name} en nueva línea: '{m2.group(1)}'")  # Comentado para producción
+                    clave = _normalize_digits(m2.group(1))
+                    if clave:
+                        return clave, True
     return None, False
 
 def extract_clave_acceso_from_text(raw_text: str) -> Tuple[Optional[str], bool]:
     if not raw_text:
         return None, False
+    
     t = strip_accents(raw_text)
     t = re.sub(r"[ \t]+", " ", t)
+    
+    # Buscar cualquier secuencia de 49 dígitos primero
+    all_digit_sequences = re.findall(r'\d{49}', t)
+    if all_digit_sequences:
+        return all_digit_sequences[0], True
+    
+    # Buscar secuencias largas de dígitos (pueden estar separadas)
+    long_sequences = re.findall(r'\d{40,}', t)
+    if long_sequences:
+        for seq in long_sequences:
+            if len(seq) >= 48:  # Permitir 48+ dígitos
+                if len(seq) == 49:
+                    return seq, True
+                elif len(seq) == 48:
+                    return seq, True
+    
     labels = [
         r"\bCLAVE\s*DE\s*ACCESO\s*DOCUMENTO\s*ELECTRONICO\b",
         r"\bCLAVE\s*ACCESO\s*DOCUMENTO\s*ELECTRONICO\b",
         r"\bCLAVE\s*DE\s*ACCESO\b",
         r"\bCLAVE\s*ACCESO\b",
     ]
+    
     clave, found = _search_after_label(t, labels, window_chars=2000)
     if found and clave:
         return clave, True
+    
     for m in re.finditer(r"DOCUMENTO\s*ELECTRONICO", t, flags=re.I):
         start = m.end()
         window = t[start:start + 2000]
-        mnum = re.search(DIGITS49_FLEX, window)
-        if mnum:
-            clave = _normalize_digits(mnum.group(1))
-            if clave:
-                return clave, True
+        
+        # Buscar varios patrones en la ventana
+        patterns_to_try = [
+            (DIGITS49_FLEX, "DIGITS49_FLEX"),
+            (r"(\d{48,50})", "DIGITS_48_TO_50"),
+            (r"(\d+(?:\s+\d+)*)", "DIGITS_WITH_SPACES")
+        ]
+        
+        for pattern, name in patterns_to_try:
+            mnum = re.search(pattern, window)
+            if mnum:
+                # Para secuencias con espacios o 48+ dígitos, ser más flexible
+                digits_only = re.sub(r"\D", "", mnum.group(1))
+                if len(digits_only) >= 48:  # Aceptar 48+ dígitos
+                    if len(digits_only) == 49:
+                        return digits_only, True
+                    elif len(digits_only) == 48:
+                        return digits_only, True
+    
     return None, False
 
 # ------------- Extracción de campos e ÍTEMS desde texto --------------

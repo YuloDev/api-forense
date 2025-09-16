@@ -14,11 +14,6 @@
     "descripcion": "Uso de software conocido y confiable para crear el PDF",
     "explicacion": "Documentos creados con software desconocido o poco común pueden ser sospechosos."
   },
-  "num_paginas": {
-    "valor": 10,
-    "descripcion": "Número de páginas esperado para el tipo de documento",
-    "explicacion": "Facturas típicamente tienen una página. Múltiples páginas pueden indicar manipulación."
-  },
   "capas_multiples": {
     "valor": 10,
     "descripcion": "Presencia de capas múltiples (OCG) en el PDF",
@@ -44,11 +39,6 @@
     "descripcion": "Alineación correcta de elementos de texto",
     "explicacion": "Texto mal alineado o con rotaciones extrañas puede indicar manipulación digital."
   },
-  "tamano_esperado": {
-    "valor": 6,
-    "descripcion": "Tamaño de archivo apropiado para el tipo de documento",
-    "explicacion": "Archivos muy grandes o pequeños para su contenido pueden ser sospechosos."
-  },
   "anotaciones_o_formularios": {
     "valor": 3,
     "descripcion": "Presencia de anotaciones o campos de formulario",
@@ -65,7 +55,7 @@
     "explicacion": "Archivos ocultos dentro del PDF pueden contener información maliciosa o no autorizada."
   },
   "firmas_pdf": {
-    "valor": -4,
+    "valor": 4,
     "descripcion": "Presencia de firmas digitales válidas",
     "explicacion": "Las firmas digitales aumentan la confiabilidad del documento (reduce el riesgo)."
   },
@@ -78,11 +68,6 @@
     "valor": 2,
     "descripcion": "Cifrado o permisos especiales aplicados",
     "explicacion": "Restricciones inusuales pueden usarse para ocultar el método de creación del documento."
-  },
-  "math_consistency": {
-    "valor": 10,
-    "descripcion": "Consistencia aritmética: subtotal + impuestos − descuentos − retenciones = total",
-    "explicacion": "Descuadres contables evidencian manipulación o error."
   },
   "sri_verificacion": {
     "valor": 20,

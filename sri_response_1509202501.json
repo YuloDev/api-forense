@@ -1,0 +1,89 @@
+{
+  "clave_acceso": "1509202501179313133600120011010000003661234567811",
+  "autorizado": true,
+  "estado": "AUTORIZADO",
+  "raw_response": {
+    "claveAccesoConsultada": "1509202501179313133600120011010000003661234567811",
+    "numeroComprobantes": "1",
+    "autorizaciones": [
+      {
+        "estado": "AUTORIZADO",
+        "numeroAutorizacion": "1509202501179313133600120011010000003661234567811",
+        "fechaAutorizacion": "2025-09-15 15:04:17-05:00",
+        "ambiente": "PRODUCCIÓN"
+      }
+    ]
+  },
+  "factura_json": {
+    "infoTributaria": {
+      "ambiente": "2",
+      "tipoEmision": "1",
+      "razonSocial": "NEXTI BUSINESS SOLUTIONS SA",
+      "nombreComercial": "NEXTI BUSINESS SOLUTIONS SA",
+      "ruc": "1793131336001",
+      "claveAcceso": "1509202501179313133600120011010000003661234567811",
+      "codDoc": "01",
+      "estab": "001",
+      "ptoEmi": "101",
+      "secuencial": "000000366",
+      "dirMatriz": "E7 LA PRADERA  520/SAN SALVADOR EDFICIO OMEGA OF 511",
+      "agenteRetencion": "10"
+    },
+    "infoFactura": {
+      "fechaEmision": "15/09/2025",
+      "dirEstablecimiento": "E7 LA PRADERA  520/SAN SALVADOR EDFICIO OMEGA OF 511",
+      "obligadoContabilidad": "SI",
+      "tipoIdentificacionComprador": "04",
+      "razonSocialComprador": "MEDICINA PARA EL ECUADOR MEDIECUADOR HUMANA S.A.",
+      "identificacionComprador": "1791279352001",
+      "direccionComprador": "RIO AMAZONAS N33 E INGLATERRA (ESQUINA)",
+      "totalSinImpuestos": 10844.0,
+      "totalDescuento": 0.0,
+      "totalConImpuestos": [
+        {
+          "codigo": "2",
+          "codigoPorcentaje": "4",
+          "baseImponible": 10844.0,
+          "valor": 1626.6
+        }
+      ],
+      "propina": 0.0,
+      "importeTotal": 12470.6,
+      "moneda": "DOLAR",
+      "pagos": [
+        {
+          "formaPago": "20",
+          "total": 12470.6,
+          "plazo": "0",
+          "unidadTiempo": "Dias"
+        }
+      ]
+    },
+    "detalles": [
+      {
+        "codigoPrincipal": "P000000022",
+        "codigoAuxiliar": "P000000022",
+        "descripcion": "SERVICIO DESARROLLO  SOFTWARE",
+        "cantidad": 1.0,
+        "precioUnitario": 10844.0,
+        "descuento": 0.0,
+        "precioTotalSinImpuesto": 10844.0,
+        "impuestos": [
+          {
+            "codigo": "2",
+            "codigoPorcentaje": "4",
+            "tarifa": 15.0,
+            "baseImponible": 10844.0,
+            "valor": 1626.6
+          }
+        ]
+      }
+    ],
+    "infoAdicional": {
+      "vendedor ": "Rocio Verdezoto",
+      "correo ": "ana.santana@humana.med.ec",
+      "ciudad ": "QUITO",
+      "observación ": "Venta"
+    }
+  }
+}

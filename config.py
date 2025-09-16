@@ -34,7 +34,6 @@ else:
         "dpi_uniforme": 8,
         "compresion_estandar": 6,
         "alineacion_texto": 6,
-        "tamano_esperado": 6,
         "anotaciones_o_formularios": 3,
         "javascript_embebido": 2,
         "archivos_incrustados": 3,
@@ -96,11 +95,6 @@ else:
             "valor": 6,
             "descripcion": "Alineación correcta de elementos de texto",
             "explicacion": "Texto mal alineado o con rotaciones extrañas puede indicar manipulación digital."
-        },
-        "tamano_esperado": {
-            "valor": 6,
-            "descripcion": "Tamaño de archivo apropiado para el tipo de documento",
-            "explicacion": "Archivos muy grandes o pequeños para su contenido pueden ser sospechosos."
         },
         "anotaciones_o_formularios": {
             "valor": 3,
