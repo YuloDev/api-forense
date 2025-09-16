@@ -83,6 +83,14 @@ def detectar_texto_sobrepuesto(pdf_bytes: bytes, tolerancia_solapamiento=5):
             },
             "penalizacion":  0
         }
+        return {
+            "texto_sobrepuesto_detectado": False,
+            "detalle": {
+                "alineacion_promedio": 1.0,
+                "rotacion_promedio": 0.0
+            },
+            "penalizacion":  0
+        }
     else:
         return {
             "texto_sobrepuesto_detectado": True,
@@ -100,6 +108,8 @@ def detectar_texto_sobrepuesto_endpoint(pdf_request: PDFRequest):
     """
     Endpoint que recibe un PDF en Base64 y devuelve si se detectó texto sobrepuesto,
     reemplazando el bloque 'Alineación de elementos de texto' y devolviendo penalización.
+    Endpoint que recibe un PDF en Base64 y devuelve si se detectó texto sobrepuesto,
+    reemplazando el bloque 'Alineación de elementos de texto' y devolviendo penalización.
     """
     try:
         pdf_bytes = base64.b64decode(pdf_request.pdfbase64)
@@ -109,6 +119,11 @@ def detectar_texto_sobrepuesto_endpoint(pdf_request: PDFRequest):
     resultado = detectar_texto_sobrepuesto(pdf_bytes, tolerancia_solapamiento=5)
  
     return {
+        "check": "Alineación de elementos de texto",
+        "detalle": resultado.get("detalle", {}),
+        "alertas": resultado.get("alertas", []),
+        "penalizacion": resultado.get("penalizacion"),
+        "texto_sobrepuesto_detectado": resultado["texto_sobrepuesto_detectado"]
         "check": "Alineación de elementos de texto",
         "detalle": resultado.get("detalle", {}),
         "alertas": resultado.get("alertas", []),
