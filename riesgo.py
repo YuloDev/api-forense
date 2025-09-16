@@ -719,27 +719,27 @@ def evaluar_riesgo_con_xml_sri(pdf_bytes: bytes, fuente_texto: str, pdf_fields: 
     # Simplemente llamamos a evaluar_riesgo pero actualizamos la validación financiera
     base_result = evaluar_riesgo(pdf_bytes, fuente_texto, pdf_fields)
     
-    # Si tenemos XML del SRI, re-ejecutamos solo la validación financiera con esos datos
-    if xml_sri and xml_sri.get("autorizado"):
-        print("DEBUG: Re-ejecutando validación financiera con XML del SRI")
-        validacion_financiera_mejorada = validar_contenido_financiero(pdf_fields, fuente_texto or "", xml_sri)
-        
-        # Reemplazar la validación financiera en el resultado
-        for i, check in enumerate(base_result.get("adicionales", [])):
-            if check.get("check") == "Validación financiera completa":
-                base_result["adicionales"][i] = {
-                    "check": "Validación financiera completa",
-                    "detalle": validacion_financiera_mejorada,
-                    "penalizacion": RISK_WEIGHTS.get("validacion_financiera", 0) if not validacion_financiera_mejorada["validacion_general"]["valido"] else 0
-                }
-                break
-        else:
-            # Si no se encontró, agregarla
-            base_result.setdefault("adicionales", []).append({
-                "check": "Validación financiera completa",
-                "detalle": validacion_financiera_mejorada,
-                "penalizacion": RISK_WEIGHTS.get("validacion_financiera", 0) if not validacion_financiera_mejorada["validacion_general"]["valido"] else 0
-            })
+    # Si tenemos XML del SRI, re-ejecutamos solo la validación financiera con esos datos (DESHABILITADO)
+    # if xml_sri and xml_sri.get("autorizado"):
+    #     print("DEBUG: Re-ejecutando validación financiera con XML del SRI")
+    #     validacion_financiera_mejorada = validar_contenido_financiero(pdf_fields, fuente_texto or "", xml_sri)
+    #     
+    #     # Reemplazar la validación financiera en el resultado
+    #     for i, check in enumerate(base_result.get("adicionales", [])):
+    #         if check.get("check") == "Validación financiera completa":
+    #             base_result["adicionales"][i] = {
+    #                 "check": "Validación financiera completa",
+    #                 "detalle": validacion_financiera_mejorada,
+    #                 "penalizacion": RISK_WEIGHTS.get("validacion_financiera", 0) if not validacion_financiera_mejorada["validacion_general"]["valido"] else 0
+    #             }
+    #             break
+    #     else:
+    #         # Si no se encontró, agregarla
+    #         base_result.setdefault("adicionales", []).append({
+    #             "check": "Validación financiera completa",
+    #             "detalle": validacion_financiera_mejorada,
+    #             "penalizacion": RISK_WEIGHTS.get("validacion_financiera", 0) if not validacion_financiera_mejorada["validacion_general"]["valido"] else 0
+    #         })
     
     return base_result
 
@@ -805,12 +805,13 @@ def evaluar_riesgo(pdf_bytes: bytes, fuente_texto: str, pdf_fields: Dict[str, An
     # TODO: Integrar XML del SRI cuando esté disponible
     validacion_financiera = validar_contenido_financiero(pdf_fields, fuente_texto or "")
     
-    # --- consistencia matemática ---
-    print(f"DEBUG EVALUAR_RIESGO: Llamando _evaluar_consistencia_matematica con pdf_fields keys: {list(pdf_fields.keys()) if pdf_fields else 'None'}")
-    math_consistency_result = _evaluar_consistencia_matematica(pdf_fields, fuente_texto or "", validacion_financiera)
-    print(f"DEBUG EVALUAR_RIESGO: math_consistency_result = {math_consistency_result}")
-    print(f"DEBUG EVALUAR_RIESGO: math_consistency_result is None? {math_consistency_result is None}")
-    print(f"DEBUG EVALUAR_RIESGO: bool(math_consistency_result)? {bool(math_consistency_result)}")
+    # --- consistencia matemática --- (DESHABILITADO)
+    # print(f"DEBUG EVALUAR_RIESGO: Llamando _evaluar_consistencia_matematica con pdf_fields keys: {list(pdf_fields.keys()) if pdf_fields else 'None'}")
+    # math_consistency_result = _evaluar_consistencia_matematica(pdf_fields, fuente_texto or "", validacion_financiera)
+    # print(f"DEBUG EVALUAR_RIESGO: math_consistency_result = {math_consistency_result}")
+    # print(f"DEBUG EVALUAR_RIESGO: math_consistency_result is None? {math_consistency_result is None}")
+    # print(f"DEBUG EVALUAR_RIESGO: bool(math_consistency_result)? {bool(math_consistency_result)}")
+    math_consistency_result = None  # Deshabilitado
     
     # --- análisis completo de firmas digitales ---
     analisis_firmas = analizar_firmas_digitales(pdf_bytes)
@@ -1062,48 +1063,48 @@ def evaluar_riesgo(pdf_bytes: bytes, fuente_texto: str, pdf_fields: Dict[str, An
     # Estructura sospechosa sin otras indicaciones (segunda verificación - eliminar duplicado)
     # Esta línea es duplicada y se puede eliminar
 
-    # Validación financiera completa (reemplaza la validación matemática anterior)
-    penal = 0
+    # Validación financiera completa (DESHABILITADO)
+    # penal = 0
+    # 
+    # # Usar el análisis financiero ya calculado
+    # if not validacion_financiera["validacion_general"]["valido"]:
+    #     # Penalización basada en el score de validación financiera
+    #     score_financiero = validacion_financiera["validacion_general"]["score_validacion"]
+    #     penal = int(RISK_WEIGHTS.get("validacion_financiera", 15) * (100 - score_financiero) / 100)
+    # 
+    # # Solo mostrar el criterio si hay datos suficientes para validar
+    # if (validacion_financiera["validacion_items"]["total_items"] > 0 or 
+    #     validacion_financiera["validacion_totales"]["total_declarado"] > 0):
+    #     
+    #     details_extra.append({
+    #         "check": "Validación financiera completa", 
+    #         "detalle": validacion_financiera, 
+    #         "penalizacion": penal
+    #     })
+    #     score += penal
     
-    # Usar el análisis financiero ya calculado
-    if not validacion_financiera["validacion_general"]["valido"]:
-        # Penalización basada en el score de validación financiera
-        score_financiero = validacion_financiera["validacion_general"]["score_validacion"]
-        penal = int(RISK_WEIGHTS.get("validacion_financiera", 15) * (100 - score_financiero) / 100)
-    
-    # Solo mostrar el criterio si hay datos suficientes para validar
-    if (validacion_financiera["validacion_items"]["total_items"] > 0 or 
-        validacion_financiera["validacion_totales"]["total_declarado"] > 0):
-        
-        details_extra.append({
-            "check": "Validación financiera completa", 
-            "detalle": validacion_financiera, 
-            "penalizacion": penal
-        })
-        score += penal
-    
-    # 5.1) Math Consistency (check específico)
-    penal_math = 0
-    math_valido = True
-    math_errores = []
-    
-    # Siempre agregar el check de math_consistency si se ejecutó
-    if math_consistency_result is not None:
-        math_valido = math_consistency_result.get("valido", True)
-        math_errores = math_consistency_result.get("errores", [])
-        
-        if not math_valido:
-            penal_math = RISK_WEIGHTS.get("math_consistency", 10)
-        
-        details_extra.append({
-            "check": "Consistencia aritmética (math_consistency)",
-            "detalle": math_consistency_result,
-            "penalizacion": penal_math
-        })
-        score += penal_math
-        print(f"DEBUG: Math consistency agregado - válido: {math_valido}, errores: {len(math_errores)}, penalización: {penal_math}")
-    else:
-        print("DEBUG: math_consistency_result es None - no se agregó el check")
+    # 5.1) Math Consistency (check específico) - DESHABILITADO
+    # penal_math = 0
+    # math_valido = True
+    # math_errores = []
+    # 
+    # # Siempre agregar el check de math_consistency si se ejecutó
+    # if math_consistency_result is not None:
+    #     math_valido = math_consistency_result.get("valido", True)
+    #     math_errores = math_consistency_result.get("errores", [])
+    #     
+    #     if not math_valido:
+    #         penal_math = RISK_WEIGHTS.get("math_consistency", 10)
+    #     
+    #     details_extra.append({
+    #         "check": "Consistencia aritmética (math_consistency)",
+    #         "detalle": math_consistency_result,
+    #         "penalizacion": penal_math
+    #     })
+    #     score += penal_math
+    #     print(f"DEBUG: Math consistency agregado - válido: {math_valido}, errores: {len(math_errores)}, penalización: {penal_math}")
+    # else:
+    #     print("DEBUG: math_consistency_result es None - no se agregó el check")
 
     # Normalizar score a [0, 100] y redondear
     score = round(max(0, min(100, score)), 2)

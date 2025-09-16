@@ -2895,10 +2895,26 @@
         "ver": true,
         "subir": true
       }
+    },
+    {
+      "id_reclamo": "CLM-000-182",
+      "fecha_envio": "16/09/2025",
+      "proveedor": {
+        "nombre": "Isabella Balseca",
+        "tipo_servicio": "Consulta Médica"
+      },
+      "estado": "En Revisión",
+      "monto_solicitado": 1500.0,
+      "monto_aprobado": null,
+      "moneda": "$",
+      "acciones": {
+        "ver": true,
+        "subir": true
+      }
     }
   ],
   "metadatos": {
-    "total_reclamos": 181,
+    "total_reclamos": 182,
     "estados_disponibles": [
       "En Revisión",
       "Aprobado",
