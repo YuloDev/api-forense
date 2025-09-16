@@ -34,13 +34,14 @@ else:
         "dpi_uniforme": 8,
         "compresion_estandar": 6,
         "alineacion_texto": 6,
-        "tamano_esperado": 6,
         "anotaciones_o_formularios": 3,
         "javascript_embebido": 2,
         "archivos_incrustados": 3,
         "firmas_pdf": -4,
         "actualizaciones_incrementales": 3,
         "cifrado_permisos_extra": 2,
+        "math_consistency": 10,
+        "sri_verificacion": 20,
     }
 
 # Cargar descripciones de RISK_WEIGHTS
@@ -95,11 +96,6 @@ else:
             "descripcion": "Alineación correcta de elementos de texto",
             "explicacion": "Texto mal alineado o con rotaciones extrañas puede indicar manipulación digital."
         },
-        "tamano_esperado": {
-            "valor": 6,
-            "descripcion": "Tamaño de archivo apropiado para el tipo de documento",
-            "explicacion": "Archivos muy grandes o pequeños para su contenido pueden ser sospechosos."
-        },
         "anotaciones_o_formularios": {
             "valor": 3,
             "descripcion": "Presencia de anotaciones o campos de formulario",
@@ -129,6 +125,16 @@ else:
             "valor": 2,
             "descripcion": "Cifrado o permisos especiales aplicados",
             "explicacion": "Restricciones inusuales pueden usarse para ocultar el método de creación del documento."
+        },
+        "math_consistency": {
+            "valor": 10,
+            "descripcion": "Consistencia aritmética: subtotal + impuestos − descuentos − retenciones = total",
+            "explicacion": "Descuadres contables evidencian manipulación o error."
+        },
+        "sri_verificacion": {
+            "valor": 20,
+            "descripcion": "Verificación exitosa contra el SRI (Servicio de Rentas Internas)",
+            "explicacion": "La capacidad de verificar el documento contra registros oficiales del SRI aumenta significativamente la confiabilidad."
         }
     }
     

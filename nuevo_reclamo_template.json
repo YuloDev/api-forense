@@ -1,0 +1,23 @@
+{
+  "id_reclamo": "CLM-000-006",
+  "fecha_envio": "26/08/2024",
+  "proveedor": {
+    "nombre": "Nombre del Proveedor",
+    "tipo_servicio": "Tipo de Servicio"
+  },
+  "estado": "En Revisión",
+  "monto_solicitado": 0.00,
+  "monto_aprobado": null,
+  "moneda": "$",
+  "acciones": {
+    "ver": true,
+    "subir": true
+  },
+  "documentos": {
+    "factura_pdf": null,
+    "documentos_soporte": []
+  },
+  "observaciones": "",
+  "fecha_creacion": "2024-08-26T10:30:00Z",
+  "fecha_actualizacion": "2024-08-26T10:30:00Z"
+}
