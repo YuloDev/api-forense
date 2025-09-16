@@ -66,11 +66,6 @@ else:
             "descripcion": "Uso de software conocido y confiable para crear el PDF",
             "explicacion": "Documentos creados con software desconocido o poco común pueden ser sospechosos."
         },
-        "num_paginas": {
-            "valor": 10,
-            "descripcion": "Número de páginas esperado para el tipo de documento",
-            "explicacion": "Facturas típicamente tienen una página. Múltiples páginas pueden indicar manipulación."
-        },
         "capas_multiples": {
             "valor": 10,
             "descripcion": "Presencia de capas múltiples (OCG) en el PDF",

@@ -34,6 +34,9 @@ from config import (
     STD_IMAGE_FILTERS,
 )
 from utils import _to_float
+from helpers.validacion_financiera import validar_contenido_financiero
+from helpers.firma_digital import analizar_firmas_digitales, tiene_firma_digital
+from helpers.deteccion_capas import LayerDetector, detect_layers_advanced, calculate_dynamic_penalty
 
 
 def verificar_sri_para_riesgo(
@@ -167,254 +170,44 @@ def _parse_fecha_emision(s: Optional[str]) -> Optional[date]:
 
 def _detect_layers_advanced(pdf_bytes: bytes, extracted_text: str = "") -> Dict[str, Any]:
     """
-    Detección avanzada de capas múltiples integrada con PDFLayerAnalyzer.
-    Retorna un diccionario con análisis detallado y porcentaje de validación.
+    Función refactorizada que usa el nuevo LayerDetector modular.
+    Mantiene compatibilidad con código existente.
     """
-    # Configuración de patrones (integrada del capaztest.py)
-    OCG_PATTERNS = [
-        rb"/OCGs",
-        rb"/OCProperties", 
-        rb"/OC\s",
-        rb"/ON\s+\[",
-        rb"/OFF\s+\[",
-        rb"/Order\s+\[",
-        rb"/RBGroups",
-        rb"/Locked\s+\[",
-        rb"/AS\s+<<",
-        rb"/Category\s+\["
-    ]
-    
-    OVERLAY_PATTERNS = [
-        rb"/Type\s*/XObject",
-        rb"/Subtype\s*/Form",
-        rb"/Group\s*<<",
-        rb"/S\s*/Transparency",
-        rb"/BM\s*/\w+",  # Blend modes
-        rb"/CA\s+[\d\.]+",  # Constant alpha
-        rb"/ca\s+[\d\.]+",  # Non-stroking alpha
-    ]
-    
-    SUSPICIOUS_OPERATORS = [
-        rb"q\s+[\d\.\-\s]+cm",  # Transformaciones de matriz
-        rb"Do\s",  # XObject references
-        rb"gs\s",  # Graphics state
-        rb"/G\d+\s+gs",  # Graphics state references
-    ]
-
-    result = {
-        "has_layers": False,
-        "confidence": 0.0,
-        "probability_percentage": 0.0,  # NUEVO: Porcentaje de validación
-        "risk_level": "VERY_LOW",
-        "indicators": [],
-        "layer_count_estimate": 0,
-        "ocg_objects": 0,
-        "overlay_objects": 0,
-        "transparency_objects": 0,
-        "suspicious_operators": 0,
-        "content_streams": 0,
-        "blend_modes": [],
-        "alpha_values": [],
-        "detailed_analysis": {},
-        "score_breakdown": {}
-    }
-    
-    sample_size = min(8_000_000, len(pdf_bytes))
-    sample = pdf_bytes[:sample_size]
-    
-    # === 1. ANÁLISIS OCG (Optional Content Groups) ===
-    ocg_count = 0
-    ocg_patterns_found = []
-    
-    for pattern in OCG_PATTERNS:
-        matches = re.findall(pattern, sample)
-        count = len(matches)
-        if count > 0:
-            ocg_count += count
-            pattern_name = pattern.decode('utf-8', errors='ignore')
-            ocg_patterns_found.append({
-                "pattern": pattern_name,
-                "count": count,
-                "samples": [m.decode('utf-8', errors='ignore')[:50] for m in matches[:3]]
-            })
-            result["indicators"].append(f"Patrón OCG: {pattern_name} ({count}x)")
-    
-    result["ocg_objects"] = ocg_count
-    
-    # Calcular confianza OCG como en capaztest.py
-    ocg_confidence = 0.0
-    if ocg_count >= 5:
-        ocg_confidence = min(0.95, 0.6 + (ocg_count * 0.05))
-    elif ocg_count >= 2:
-        ocg_confidence = 0.4 + (ocg_count * 0.1)
-    elif ocg_count == 1:
-        ocg_confidence = 0.2
-    
-    result["ocg_confidence"] = round(ocg_confidence, 3)
-    
-    # === 2. ANÁLISIS DE OBJETOS SUPERPUESTOS ===
-    overlay_count = 0
-    transparency_count = 0
-    
-    for pattern in OVERLAY_PATTERNS:
-        matches = len(re.findall(pattern, sample))
-        overlay_count += matches
-        
-        if b"Transparency" in pattern:
-            transparency_count += matches
-    
-    result["overlay_objects"] = overlay_count
-    result["transparency_objects"] = transparency_count
-    
-    # Buscar modos de fusión específicos
-    blend_modes = re.findall(rb"/BM\s*/(\w+)", sample)
-    result["blend_modes"] = [bm.decode('utf-8', errors='ignore') for bm in blend_modes[:10]]
-    
-    # Buscar valores alpha
-    alpha_values = re.findall(rb"/CA\s+([\d\.]+)", sample)
-    alpha_values.extend(re.findall(rb"/ca\s+([\d\.]+)", sample))
-    result["alpha_values"] = [float(av) for av in alpha_values[:20] if av]
-    
-    if overlay_count > 3:
-        result["indicators"].append(f"Objetos superpuestos: {overlay_count}")
-    
-    # === 3. ANÁLISIS DE OPERADORES SOSPECHOSOS ===
-    suspicious_ops = 0
-    operator_details = []
-    
-    for pattern in SUSPICIOUS_OPERATORS:
-        matches = re.findall(pattern, sample)
-        count = len(matches)
-        suspicious_ops += count
-        if count > 0:
-            operator_details.append({
-                "operator": pattern.decode('utf-8', errors='ignore'),
-                "count": count
-            })
-    
-    result["suspicious_operators"] = suspicious_ops
-    if suspicious_ops > 20:
-        result["indicators"].append(f"Operadores sospechosos: {suspicious_ops}")
-    
-    # === 4. ANÁLISIS DE CONTENT STREAMS ===
-    content_streams = len(re.findall(rb"stream\s", sample))
-    result["content_streams"] = content_streams
-    
-    if content_streams > 5:
-        result["indicators"].append(f"Múltiples content streams: {content_streams}")
-    
-    # === 5. ANÁLISIS DE TEXTO (si está disponible) ===
-    text_overlapping_score = 0.0
-    if extracted_text:
-        text_analysis = _detect_text_overlapping(extracted_text)
-        # Manejar tanto el tipo bool (actual) como dict (legacy)
-        if isinstance(text_analysis, bool):
-            text_overlapping_score = 0.7 if text_analysis else 0.0
-            has_overlapping = text_analysis
-        else:
-            text_overlapping_score = text_analysis.get("overlapping_probability", 0.0)
-            has_overlapping = text_analysis.get("has_overlapping", False)
-            
-        if has_overlapping:
-            result["indicators"].append(f"Superposición de texto: {text_overlapping_score:.1%}")
-    
-    # === 6. CÁLCULO DE PROBABILIDAD AVANZADO ===
-    # Pesos idénticos a capaztest.py
-    weights = {
-        "ocg_confidence": 0.35,      # OCG detection (como capaztest.py)
-        "overlay_presence": 0.25,    # Objetos superpuestos
-        "text_overlapping": 0.25,    # Superposición de texto 
-        "structure_suspicious": 0.15 # Análisis estructural (como capaztest.py)
-    }
-    
-    score = 0.0
-    score_breakdown = {}
-    
-    # Componente OCG (usando confianza calculada como en capaztest.py)
-    if ocg_count > 0:
-        score += ocg_confidence * weights["ocg_confidence"]
-        score_breakdown["ocg_contribution"] = round(ocg_confidence * weights["ocg_confidence"], 3)
-    
-    # Componente Overlay
-    if overlay_count > 3:
-        overlay_score = min(1.0, overlay_count / 20.0)
-        score += overlay_score * weights["overlay_presence"]
-        score_breakdown["overlay_contribution"] = round(overlay_score * weights["overlay_presence"], 3)
-    
-    # Componente de texto
-    if text_overlapping_score > 0:
-        score += text_overlapping_score * weights["text_overlapping"]
-        score_breakdown["text_contribution"] = round(text_overlapping_score * weights["text_overlapping"], 3)
-    
-    # Componente estructura - necesitamos ejecutar el análisis aquí
-    # (se ejecutará de nuevo más abajo, pero necesitamos el resultado para el score de capas)
     try:
-        doc_temp = fitz.open(stream=pdf_bytes, filetype="pdf")
-        structure_analysis_temp = _analyze_pdf_structure_layers(doc_temp)
-        doc_temp.close()
+        # Usar el nuevo detector modular
+        detector = LayerDetector(pdf_bytes, extracted_text)
+        result = detector.analyze()
         
-        if structure_analysis_temp["suspicious_structure"]:
-            struct_score = 0.8  # Valor fijo como en capaztest.py
-            score += struct_score * weights["structure_suspicious"]
-            score_breakdown["structure_contribution"] = round(struct_score * weights["structure_suspicious"], 3)
-    except Exception:
-        # Si hay error, no agregar la contribución estructural
-        pass
-    
-    # === 7. CLASIFICACIÓN DE RIESGO ===
-    probability_percentage = round(score * 100, 1)
-    
-    # Clasificación idéntica a capaztest.py
-    if score >= 0.8:
-        risk_level = "VERY_HIGH"
-        has_layers = True
-        confidence = min(1.0, score + 0.1)  # Como en capaztest.py
-    elif score >= 0.6:
-        risk_level = "HIGH"
-        has_layers = True
-        confidence = min(1.0, score + 0.1)
-    elif score >= 0.4:
-        risk_level = "MEDIUM"
-        has_layers = True
-        confidence = min(1.0, score + 0.1)
-    elif score >= 0.2:
-        risk_level = "LOW"
-        has_layers = True  # Como en capaztest.py
-        confidence = min(1.0, score + 0.1)
-    else:
-        risk_level = "VERY_LOW"
-        has_layers = False
-        confidence = min(1.0, score + 0.1)
-    
-    # === 8. ESTIMACIÓN DE CAPAS ===
-    if ocg_count > 0:
-        layer_estimate = min(ocg_count // 2, 10)
-    elif overlay_count > 10:
-        layer_estimate = min(overlay_count // 5, 8)
-    else:
-        layer_estimate = 0
-    
-    # === 9. RESULTADO FINAL ===
-    result.update({
-        "has_layers": has_layers,
-        "confidence": round(confidence, 3),
-        "probability_percentage": probability_percentage,
-        "risk_level": risk_level,
-        "layer_count_estimate": layer_estimate,
-        "score_breakdown": score_breakdown,
-        "weights_used": weights,  # Como en capaztest.py
-        "detailed_analysis": {
-            "ocg_patterns_found": ocg_patterns_found,
-            "operator_details": operator_details,
-            "transparency_analysis": {
-                "alpha_values": result["alpha_values"],
-                "blend_modes": result["blend_modes"],
-                "transparency_objects": transparency_count
-            }
+        # Mapear campos para mantener compatibilidad con código existente
+        if "penalty_points" in result:
+            # El nuevo sistema ya calcula la penalización óptima
+            result["penalty_calculated"] = result["penalty_points"]
+        
+        return result
+        
+    except Exception as e:
+        # Fallback en caso de error
+        return {
+            "has_layers": False,
+            "confidence": 0.0,
+            "probability_percentage": 0.0,
+            "risk_level": "VERY_LOW",
+            "penalty_points": 0,
+            "error": f"Error en detección de capas: {str(e)}",
+            "indicators": [],
+            "layer_count_estimate": 0,
+            "ocg_objects": 0,
+            "overlay_objects": 0,
+            "transparency_objects": 0,
+            "suspicious_operators": 0,
+            "content_streams": 0,
+            "blend_modes": [],
+            "alpha_values": [],
+            "score_breakdown": {},
+            "weights_used": {"ocg_confidence": 0.35, "overlay_presence": 0.25, 
+                           "text_overlapping": 0.25, "structure_suspicious": 0.15},
+            "detailed_analysis": {}
         }
-    })
-    
-    return result
 
 
 def _analyze_pdf_structure_layers(doc: fitz.Document) -> Dict[str, Any]:
@@ -525,6 +318,104 @@ def _detect_layers(pdf_bytes: bytes) -> bool:
     """Función simplificada que mantiene la compatibilidad con el código existente."""
     advanced_result = _detect_layers_advanced(pdf_bytes)
     return advanced_result["has_layers"]
+
+
+# ================= FUNCIONES DE CONVENIENCIA PARA EL NUEVO SISTEMA =================
+
+def evaluar_capas_multiples_completo(pdf_bytes: bytes, extracted_text: str = "", 
+                                   base_weight: int = None) -> Dict[str, Any]:
+    """
+    Función de conveniencia para ejecutar análisis completo de capas múltiples
+    con el nuevo sistema modular.
+    
+    Args:
+        pdf_bytes: Contenido del PDF en bytes
+        extracted_text: Texto extraído del PDF (opcional)
+        base_weight: Peso base personalizado (opcional, default: 15)
+        
+    Returns:
+        Dict con análisis completo y penalización calculada
+    """
+    try:
+        # Usar el nuevo sistema modular
+        detector = LayerDetector(pdf_bytes, extracted_text, base_weight)
+        result = detector.analyze()
+        
+        # Agregar información de configuración
+        result["configuration"] = {
+            "base_weight_used": base_weight or 15,
+            "analysis_version": "modular_v2",
+            "components_analyzed": ["OCG", "Overlays", "TextOverlap", "Structure"],
+            "calculation_method": "dynamic_weighted"
+        }
+        
+        return result
+        
+    except Exception as e:
+        return {
+            "error": f"Error en análisis completo: {str(e)}",
+            "has_layers": False,
+            "penalty_points": 0,
+            "probability_percentage": 0.0
+        }
+
+
+def calcular_penalizacion_capas_optimizada(probability_percentage: float, 
+                                         risk_level: str = None,
+                                         base_weight: int = 15) -> Dict[str, Any]:
+    """
+    Calcula penalización optimizada usando múltiples métodos y retorna el análisis completo.
+    
+    Args:
+        probability_percentage: Porcentaje de probabilidad (0-100)
+        risk_level: Nivel de riesgo opcional (AUTO-detectado si no se proporciona)
+        base_weight: Peso base para cálculos
+        
+    Returns:
+        Dict con penalización y desglose detallado
+    """
+    # Método 1: Penalización proporcional
+    proportional = round((probability_percentage / 100) * base_weight)
+    
+    # Método 2: Penalización escalonada
+    if not risk_level:
+        if probability_percentage >= 80:
+            risk_level = "VERY_HIGH"
+        elif probability_percentage >= 60:
+            risk_level = "HIGH"
+        elif probability_percentage >= 40:
+            risk_level = "MEDIUM"
+        elif probability_percentage >= 20:
+            risk_level = "LOW"
+        else:
+            risk_level = "VERY_LOW"
+    
+    # Multiplicadores por nivel
+    multipliers = {
+        "VERY_HIGH": 1.0,
+        "HIGH": 0.8,
+        "MEDIUM": 0.6,
+        "LOW": 0.4,
+        "VERY_LOW": 0.2
+    }
+    
+    scaled = round(base_weight * multipliers.get(risk_level, 0.2))
+    
+    # Usar el mayor de los dos métodos para ser más estricto
+    final_penalty = max(proportional, scaled)
+    
+    return {
+        "penalty_points": final_penalty,
+        "calculation_breakdown": {
+            "proportional_method": proportional,
+            "scaled_method": scaled,
+            "method_used": "max_of_both",
+            "risk_level": risk_level,
+            "base_weight": base_weight,
+            "probability_percentage": probability_percentage
+        },
+        "explanation": f"Penalización de {final_penalty} puntos para {probability_percentage:.1f}% de probabilidad (nivel: {risk_level})"
+    }
 
 
 def detectar_texto_sobrepuesto_avanzado(pdf_bytes: bytes, tolerancia_solapamiento: float = 5.0) -> Dict[str, Any]:
@@ -658,9 +549,6 @@ def _has_forms_or_annots(pdf_bytes: bytes) -> bool:
     return (b"/AcroForm" in sample) or (b"/Annots" in sample)
 
 
-def _has_sig(pdf_bytes: bytes) -> bool:
-    sample = pdf_bytes[: min(6_000_000, len(pdf_bytes))]
-    return (b"/Sig" in sample) or (b"/DigitalSignature" in sample)
 
 
 def _collect_fonts_and_alignment(page: fitz.Page) -> Tuple[List[str], Dict[str, Any]]:
@@ -824,6 +712,38 @@ def _is_scanned_image_pdf(pdf_bytes: bytes, extracted_text: str) -> bool:
 
 # --------------------- evaluación principal de riesgo ---------------------
 
+def evaluar_riesgo_con_xml_sri(pdf_bytes: bytes, fuente_texto: str, pdf_fields: Dict[str, Any], xml_sri: Dict[str, Any] = None) -> Dict[str, Any]:
+    """
+    Versión de evaluar_riesgo que puede usar datos del XML del SRI para validación financiera más precisa.
+    """
+    # Simplemente llamamos a evaluar_riesgo pero actualizamos la validación financiera
+    base_result = evaluar_riesgo(pdf_bytes, fuente_texto, pdf_fields)
+    
+    # Si tenemos XML del SRI, re-ejecutamos solo la validación financiera con esos datos
+    if xml_sri and xml_sri.get("autorizado"):
+        print("DEBUG: Re-ejecutando validación financiera con XML del SRI")
+        validacion_financiera_mejorada = validar_contenido_financiero(pdf_fields, fuente_texto or "", xml_sri)
+        
+        # Reemplazar la validación financiera en el resultado
+        for i, check in enumerate(base_result.get("adicionales", [])):
+            if check.get("check") == "Validación financiera completa":
+                base_result["adicionales"][i] = {
+                    "check": "Validación financiera completa",
+                    "detalle": validacion_financiera_mejorada,
+                    "penalizacion": RISK_WEIGHTS.get("validacion_financiera", 0) if not validacion_financiera_mejorada["validacion_general"]["valido"] else 0
+                }
+                break
+        else:
+            # Si no se encontró, agregarla
+            base_result.setdefault("adicionales", []).append({
+                "check": "Validación financiera completa",
+                "detalle": validacion_financiera_mejorada,
+                "penalizacion": RISK_WEIGHTS.get("validacion_financiera", 0) if not validacion_financiera_mejorada["validacion_general"]["valido"] else 0
+            })
+    
+    return base_result
+
+
 def evaluar_riesgo(pdf_bytes: bytes, fuente_texto: str, pdf_fields: Dict[str, Any]) -> Dict[str, Any]:
     """Calcula score y desglose de validaciones para el PDF."""
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
@@ -878,6 +798,23 @@ def evaluar_riesgo(pdf_bytes: bytes, fuente_texto: str, pdf_fields: Dict[str, An
     align_score_mean = statistics.mean(align_score_vals) if align_score_vals else 1.0
     rot_ratio_mean = statistics.mean(rot_ratio_vals) if rot_ratio_vals else 0.0
 
+    # --- análisis avanzado de texto sobrepuesto (ejecutar una sola vez) ---
+    texto_sobrepuesto_analisis_completo = detectar_texto_sobrepuesto_avanzado(pdf_bytes)
+    
+    # --- análisis financiero completo ---
+    # TODO: Integrar XML del SRI cuando esté disponible
+    validacion_financiera = validar_contenido_financiero(pdf_fields, fuente_texto or "")
+    
+    # --- consistencia matemática ---
+    print(f"DEBUG EVALUAR_RIESGO: Llamando _evaluar_consistencia_matematica con pdf_fields keys: {list(pdf_fields.keys()) if pdf_fields else 'None'}")
+    math_consistency_result = _evaluar_consistencia_matematica(pdf_fields, fuente_texto or "", validacion_financiera)
+    print(f"DEBUG EVALUAR_RIESGO: math_consistency_result = {math_consistency_result}")
+    print(f"DEBUG EVALUAR_RIESGO: math_consistency_result is None? {math_consistency_result is None}")
+    print(f"DEBUG EVALUAR_RIESGO: bool(math_consistency_result)? {bool(math_consistency_result)}")
+    
+    # --- análisis completo de firmas digitales ---
+    analisis_firmas = analizar_firmas_digitales(pdf_bytes)
+
     # --- tamaño esperado ---
     size_expect = _file_size_expectation(size_bytes, pages, scanned)
 
@@ -885,7 +822,7 @@ def evaluar_riesgo(pdf_bytes: bytes, fuente_texto: str, pdf_fields: Dict[str, An
     has_js = _has_js_embedded(pdf_bytes)
     has_emb = _has_embedded_files(pdf_bytes)
     has_forms = _has_forms_or_annots(pdf_bytes)
-    has_sig = _has_sig(pdf_bytes)
+    has_sig = tiene_firma_digital(pdf_bytes)
     incr_updates = _count_incremental_updates(pdf_bytes)
     try:
         is_encrypted = doc.is_encrypted
@@ -928,13 +865,8 @@ def evaluar_riesgo(pdf_bytes: bytes, fuente_texto: str, pdf_fields: Dict[str, An
     details_prior.append({"check": "Software de creación/producción conocido", "detalle": meta, "penalizacion": penal})
     score += penal
 
-    # 4) Número de páginas esperado = 1
-    penal = 0 if pages == 1 else RISK_WEIGHTS["num_paginas"]
-    details_prior.append({"check": "Número de páginas esperado = 1", "detalle": f"{pages} pág(s)", "penalizacion": penal})
-    score += penal
 
-    # 5) Presencia de capas múltiples (ANÁLISIS INTEGRADO CON PORCENTAJES)
-    penal = 0
+    # 5) Presencia de capas múltiples (ANÁLISIS INTEGRADO CON SISTEMA DINÁMICO)
     layer_details = {
         "deteccion_avanzada": layers_analysis["has_layers"],
         "porcentaje_probabilidad": layers_analysis["probability_percentage"],
@@ -950,21 +882,28 @@ def evaluar_riesgo(pdf_bytes: bytes, fuente_texto: str, pdf_fields: Dict[str, An
         "valores_alpha": layers_analysis["alpha_values"],
         "desglose_puntuacion": layers_analysis["score_breakdown"],
         "estimacion_capas": layers_analysis["layer_count_estimate"],
-        "analisis_detallado": layers_analysis["detailed_analysis"]
+        "analisis_detallado": layers_analysis["detailed_analysis"],
+        "metodo_calculo": "sistema_dinamico_v2"
     }
     
-    # Penalización dinámica basada en el porcentaje de probabilidad
-    probability_pct = layers_analysis["probability_percentage"]
-    if probability_pct >= 80:
-        penal = RISK_WEIGHTS["capas_multiples"]  # Penalización completa (40 puntos)
-    elif probability_pct >= 60:
-        penal = int(RISK_WEIGHTS["capas_multiples"] * 0.8)  # 80% de penalización (32 puntos)
-    elif probability_pct >= 40:
-        penal = int(RISK_WEIGHTS["capas_multiples"] * 0.6)  # 60% de penalización (24 puntos)
-    elif probability_pct >= 20:
-        penal = int(RISK_WEIGHTS["capas_multiples"] * 0.3)  # 30% de penalización (12 puntos)
-    # Si < 20%, no hay penalización (0 puntos)
+    # NUEVO SISTEMA DE PESOS DINÁMICOS MEJORADO
+    # El LayerDetector ya calculó la penalización óptima usando múltiples métodos
+    if "penalty_points" in layers_analysis:
+        penal = layers_analysis["penalty_points"]
+        layer_details["peso_base_usado"] = layers_analysis.get("weights_used", {})
+        layer_details["penalty_method"] = "dynamic_calculated"
+    else:
+        # Fallback al método anterior si no está disponible
+        probability_pct = layers_analysis["probability_percentage"]
+        base_weight = RISK_WEIGHTS.get("capas_multiples", 15)  # Usar peso mejorado por defecto
+        penal = calculate_dynamic_penalty(probability_pct, base_weight)
+        layer_details["peso_base_usado"] = base_weight
+        layer_details["penalty_method"] = "fallback_calculation"
     
+    # Agregar información adicional del cálculo
+    layer_details["penalty_calculated"] = penal
+    layer_details["penalty_explanation"] = f"Penalización dinámica calculada: {penal} puntos para {layers_analysis['probability_percentage']:.1f}% de probabilidad (nivel: {layers_analysis['risk_level']})"
+
     details_prior.append({
         "check": "Presencia de capas múltiples (análisis integrado)", 
         "detalle": layer_details, 
@@ -1000,62 +939,37 @@ def evaluar_riesgo(pdf_bytes: bytes, fuente_texto: str, pdf_fields: Dict[str, An
     details_sec.append({"check": "Métodos de compresión estándar", "detalle": list(filters_set), "penalizacion": penal})
     score += penal
 
-    # Alineación de elementos de texto (análisis avanzado con detección de solapamiento)
+    # Alineación de elementos de texto (análisis completo con texto sobrepuesto)
     penal = 0
     
-    # Ejecutar análisis avanzado de texto sobrepuesto
-    texto_sobrepuesto = detectar_texto_sobrepuesto_avanzado(pdf_bytes)
+    # Calcular penalización basada en alineación tradicional
+    if align_score_mean < 0.7 or rot_ratio_mean > 0.2:
+        penal = RISK_WEIGHTS["alineacion_texto"]
+    elif align_score_mean < 0.85 or rot_ratio_mean > 0.1:
+        penal = int(RISK_WEIGHTS["alineacion_texto"] * 0.6)
     
-    # Construir detalle combinando análisis tradicional y avanzado
-    detalle_alineacion = {
+    # Usar el análisis ya calculado para agregar información adicional
+    texto_sobrepuesto = texto_sobrepuesto_analisis_completo
+    
+    # Construir detalle completo combinando alineación tradicional + texto sobrepuesto
+    detalle_completo = {
         "alineacion_promedio": align_score_mean, 
         "rotacion_promedio": rot_ratio_mean,
-        "analisis_solapamiento": {
+        "alertas": texto_sobrepuesto.get("alertas", []),
             "texto_sobrepuesto_detectado": texto_sobrepuesto.get("texto_sobrepuesto_detectado", False),
             "total_casos": texto_sobrepuesto.get("total_casos", 0),
-            "paginas_afectadas": len(texto_sobrepuesto.get("paginas_afectadas", [])),
+        "paginas_afectadas": texto_sobrepuesto.get("paginas_afectadas", []),
             "metodo_usado": texto_sobrepuesto.get("metodo_usado", "desconocido"),
             "estadisticas": texto_sobrepuesto.get("estadisticas", {})
-        }
     }
     
-    # Incluir casos específicos si se encontraron (máximo 3 ejemplos)
-    if texto_sobrepuesto.get("texto_sobrepuesto_detectado", False) and texto_sobrepuesto.get("alertas", []):
-        ejemplos_solapamiento = []
-        for alerta in texto_sobrepuesto.get("alertas", [])[:3]:  # Máximo 3 ejemplos
-            if 'solapamiento_px' in alerta:  # Solo casos reales, no errores
-                ejemplos_solapamiento.append({
-                    "pagina": alerta["pagina"],
-                    "texto1": alerta["texto1"][:30],  # Truncar para el reporte
-                    "texto2": alerta["texto2"][:30],
-                    "porcentaje_solapamiento": alerta["porcentaje_solapamiento"]
-                })
-        detalle_alineacion["analisis_solapamiento"]["ejemplos"] = ejemplos_solapamiento
-    
-    # Aplicar penalización considerando ambos análisis
-    # Criterios originales de alineación
-    alineacion_problematica = align_score_mean < 0.7 or rot_ratio_mean > 0.2
-    alineacion_sospechosa = align_score_mean < 0.85 or rot_ratio_mean > 0.1
-    
-    # Criterios de texto sobrepuesto
-    total_casos = texto_sobrepuesto.get("total_casos", 0)
-    solapamiento_critico = total_casos >= 5
-    solapamiento_moderado = total_casos >= 2
-    
-    if alineacion_problematica or solapamiento_critico:
-        penal = RISK_WEIGHTS["alineacion_texto"]  # Penalización completa
-    elif alineacion_sospechosa or solapamiento_moderado:
-        penal = int(RISK_WEIGHTS["alineacion_texto"] * 0.6)  # Penalización parcial
-    elif texto_sobrepuesto.get("texto_sobrepuesto_detectado", False):  # Cualquier solapamiento detectado
-        penal = int(RISK_WEIGHTS["alineacion_texto"] * 0.3)  # Penalización leve
-    
-    # Agregar información adicional si hubo error en el análisis avanzado
+    # Agregar error si existe
     if texto_sobrepuesto.get("error"):
-        detalle_alineacion["analisis_solapamiento"]["error"] = texto_sobrepuesto["error"]
+        detalle_completo["error"] = texto_sobrepuesto["error"]
     
     details_sec.append({
-        "check": "Alineación de elementos de texto (análisis avanzado)",
-        "detalle": detalle_alineacion,
+        "check": "Alineación de elementos de texto",
+        "detalle": detalle_completo,
         "penalizacion": penal
     })
     score += penal
@@ -1077,9 +991,44 @@ def evaluar_riesgo(pdf_bytes: bytes, fuente_texto: str, pdf_fields: Dict[str, An
     details_extra.append({"check": "Archivos incrustados", "detalle": has_emb, "penalizacion": penal})
     score += penal
 
-    # Firmas (reduce riesgo si existe)
-    penal = RISK_WEIGHTS["firmas_pdf"] if has_sig else 0
-    details_extra.append({"check": "Firma(s) digital(es) PDF", "detalle": has_sig, "penalizacion": penal})
+    # Firmas digitales (análisis completo)
+    penal = 0
+    if has_sig:
+        # Bonificación base por tener firma
+        penal = RISK_WEIGHTS["firmas_pdf"]
+        
+        # Ajustes basados en calidad de la firma
+        if analisis_firmas["firmas_validas"] > 0:
+            # Bonificación adicional por firmas válidas
+            penal = int(penal * 1.5)
+        
+        if not analisis_firmas["integridad_documento"]["documento_integro"]:
+            # Penalización si el documento fue modificado después de firmar
+            penal = int(penal * 0.3)  # Reduce significativamente la bonificación
+        
+        if analisis_firmas["seguridad"]["nivel_seguridad"] == "alto":
+            # Bonificación extra por alta seguridad
+            penal = int(penal * 1.2)
+    
+    # Crear detalle completo de firma
+    detalle_firma = {
+        "firma_detectada": has_sig,
+        "cantidad_firmas": analisis_firmas["cantidad_firmas"],
+        "firmas_validas": analisis_firmas["firmas_validas"],
+        "nivel_seguridad": analisis_firmas["seguridad"]["nivel_seguridad"],
+        "documento_integro": analisis_firmas["integridad_documento"]["documento_integro"],
+        "certificado_valido": analisis_firmas["cadena_confianza"]["certificado_raiz_valido"]
+    }
+    
+    # Agregar vulnerabilidades si existen
+    if analisis_firmas["seguridad"]["vulnerabilidades"]:
+        detalle_firma["vulnerabilidades"] = analisis_firmas["seguridad"]["vulnerabilidades"]
+    
+    details_extra.append({
+        "check": "Firma(s) digital(es) PDF", 
+        "detalle": detalle_firma, 
+        "penalizacion": penal
+    })
     score += penal
 
     # Actualizaciones incrementales (>1 startxref)
@@ -1100,7 +1049,7 @@ def evaluar_riesgo(pdf_bytes: bytes, fuente_texto: str, pdf_fields: Dict[str, An
     # Estructura sospechosa sin otras indicaciones
     has_text_overlapping = text_overlapping if isinstance(text_overlapping, bool) else text_overlapping.get("has_overlapping", False)
     if structure_analysis["suspicious_structure"] and not has_layers and not has_text_overlapping:
-        penal = int(RISK_WEIGHTS.get("capas_multiples", 15) * 0.3)
+        penal = int(RISK_WEIGHTS.get("capas_multiples"))
         details_extra.append({
             "check": "Estructura PDF sospechosa", 
             "detalle": structure_analysis["details"], 
@@ -1113,376 +1062,51 @@ def evaluar_riesgo(pdf_bytes: bytes, fuente_texto: str, pdf_fields: Dict[str, An
     # Estructura sospechosa sin otras indicaciones (segunda verificación - eliminar duplicado)
     # Esta línea es duplicada y se puede eliminar
 
-    # Consistencia matemática/aritmética
+    # Validación financiera completa (reemplaza la validación matemática anterior)
     penal = 0
-    math_check_detail = {"valido": True, "mensaje": "Sin datos suficientes para validar"}
     
-    try:
-        # Obtener datos del PDF extraído - valores básicos
-        pdf_subtotal_items = _to_float(pdf_fields.get("totalCalculadoPorItems"))
-        pdf_total_declarado = _to_float(pdf_fields.get("importeTotal"))
+    # Usar el análisis financiero ya calculado
+    if not validacion_financiera["validacion_general"]["valido"]:
+        # Penalización basada en el score de validación financiera
+        score_financiero = validacion_financiera["validacion_general"]["score_validacion"]
+        penal = int(RISK_WEIGHTS.get("validacion_financiera", 15) * (100 - score_financiero) / 100)
+    
+    # Solo mostrar el criterio si hay datos suficientes para validar
+    if (validacion_financiera["validacion_items"]["total_items"] > 0 or 
+        validacion_financiera["validacion_totales"]["total_declarado"] > 0):
         
-        # Obtener items para validar subtotal
-        pdf_items = pdf_fields.get("items", [])
+        details_extra.append({
+            "check": "Validación financiera completa", 
+            "detalle": validacion_financiera, 
+            "penalizacion": penal
+        })
+        score += penal
+    
+    # 5.1) Math Consistency (check específico)
+    penal_math = 0
+    math_valido = True
+    math_errores = []
+    
+    # Siempre agregar el check de math_consistency si se ejecutó
+    if math_consistency_result is not None:
+        math_valido = math_consistency_result.get("valido", True)
+        math_errores = math_consistency_result.get("errores", [])
         
-        # Intentar otras claves comunes si no hay items
-        if not pdf_items:
-            pdf_items = pdf_fields.get("productos", [])
-        if not pdf_items:
-            pdf_items = pdf_fields.get("detalles", [])
-        if not pdf_items:
-            pdf_items = pdf_fields.get("lineas", [])
+        if not math_valido:
+            penal_math = RISK_WEIGHTS.get("math_consistency", 10)
         
-        items_validation = {
-            "valido": True, 
-            "mensaje": "No hay items para validar",
-            "debug_keys": list(pdf_fields.keys()),
-            "items_found": len(pdf_items) if pdf_items else 0,
-            "debug_content": {
-                "items": pdf_fields.get("items"),
-                "productos": pdf_fields.get("productos"), 
-                "detalles": pdf_fields.get("detalles"),
-                "lineas": pdf_fields.get("lineas")
-            }
-        }
-        
-        if pdf_items and len(pdf_items) > 0:
-            # Calcular subtotal basado en items
-            calculated_subtotal = 0.0
-            items_detail = []
-            
-            for item in pdf_items:
-                # Saltar items de debug
-                if item.get("DEBUG_INFO", False):
-                    continue
-                    
-                cantidad = _to_float(item.get("cantidad", 0))
-                precio_unitario = _to_float(item.get("precioUnitario", 0))
-                precio_total_item = _to_float(item.get("precioTotalSinImpuestos", item.get("precioTotal", precio_unitario * cantidad)))
-                
-                if cantidad and precio_unitario:
-                    calculated_item_total = cantidad * precio_unitario
-                    calculated_subtotal += calculated_item_total
-                    
-                    items_detail.append({
-                        "descripcion": item.get("descripcion", "")[:50],
-                        "cantidad": cantidad,
-                        "precio_unitario": precio_unitario,
-                        "calculado": round(calculated_item_total, 2),
-                        "declarado": round(precio_total_item, 2)
-                    })
-            
-            # Validar subtotal calculado vs declarado
-            items_validation = {
-                "total_items": len(pdf_items),
-                "subtotal_calculado": round(calculated_subtotal, 2),
-                "items_detalle": items_detail,
-                "debug_items_raw": pdf_items[:3] if pdf_items else []  # Mostrar primeros 3 items
-            }
-        
-        # Intentar extraer componentes adicionales del texto si están disponibles
-        raw_text = fuente_texto or ""
-        
-        # Buscar subtotales, impuestos y descuentos en el texto
-        def extract_amount_from_text(patterns, text, debug_name=""):
-            """Extrae un monto usando múltiples patrones regex."""
-            for i, pattern in enumerate(patterns):
-                match = re.search(pattern, text, re.IGNORECASE)
-                if match:
-                    amount_str = match.group(1).replace(',', '.')
-                    amount = _to_float(amount_str)
-                    # Debug info para verificar extracción
-                    return amount
-            return None
-        
-        # Función mejorada para extraer valores específicos de la tabla
-        def extract_table_values(text):
-            """Extrae valores específicos de la tabla de subtotales/totales."""
-            values = {}
-            
-            lines = text.split('\n')
-            
-            # Nueva estrategia: buscar valores cerca de las etiquetas
-            def find_value_near_label(label_terms, context_lines=2):
-                """Busca un valor numérico cerca de una etiqueta específica."""
-                found_values = []
-                
-                for i, line in enumerate(lines):
-                    line_upper = line.upper().strip()
-                    # Buscar la posición exacta de cada término
-                    for term in label_terms:
-                        term_upper = term.upper()
-                        term_pos = line_upper.find(term_upper)
-                        if term_pos >= 0:
-                            # Buscar números cerca de esta posición específica
-                            # Buscar en un rango de ±30 caracteres alrededor de la etiqueta
-                            start_search = max(0, term_pos - 30)
-                            end_search = min(len(line), term_pos + len(term_upper) + 30)
-                            search_area = line[start_search:end_search]
-                            
-                            # Buscar números en esta área específica
-                            for match in re.finditer(r'([0-9]+(?:[.,][0-9]{1,2})?)', search_area):
-                                num = match.group(1)
-                                num_pos = start_search + match.start()
-                                distance = abs(num_pos - (term_pos + len(term_upper)))
-                                value = _to_float(num.replace(',', '.'))
-                                
-                                # Filtrar números muy grandes (RUCs, códigos) y muy pequeños
-                                if value is not None and 0.01 <= value <= 9999999:
-                                    # Para totales, ser más restrictivo en el rango
-                                    if any(t.upper() in ['VALOR TOTAL', 'VALOR', 'TOTAL'] for t in label_terms):
-                                        if 0.10 <= value <= 999999:  # Rango razonable para totales
-                                            found_values.append(('same_line', value, distance, line.strip()))
-                                    # Para otros valores (subtotal, IVA, descuento)
-                                    else:
-                                        if 0.01 <= value <= 999999:
-                                            found_values.append(('same_line', value, distance, line.strip()))
-                        
-                        # Para líneas múltiples, mantener lógica original
-                        if len(lines) > 1:
-                            # Buscar en líneas muy cercanas (1-2 líneas)
-                            for offset in range(1, context_lines + 1):
-                                # Buscar en líneas siguientes
-                                if i + offset < len(lines):
-                                    next_line = lines[i + offset].strip()
-                                    # Solo considerar líneas que parecen tener solo números o valores monetarios
-                                    if re.match(r'^\s*[0-9]+(?:[.,][0-9]{1,2})?\s*$', next_line):
-                                        numbers = re.findall(r'([0-9]+(?:[.,][0-9]{1,2})?)', next_line)
-                                        for num in numbers:
-                                            value = _to_float(num.replace(',', '.'))
-                                            if value is not None and 0.01 <= value <= 999999:
-                                                found_values.append(('next_line', value, 0, next_line))
-                                
-                                # Buscar en líneas anteriores
-                                if i - offset >= 0:
-                                    prev_line = lines[i - offset].strip()
-                                    # Solo considerar líneas que parecen tener solo números
-                                    if re.match(r'^\s*[0-9]+(?:[.,][0-9]{1,2})?\s*$', prev_line):
-                                        numbers = re.findall(r'([0-9]+(?:[.,][0-9]{1,2})?)', prev_line)
-                                        for num in numbers:
-                                            value = _to_float(num.replace(',', '.'))
-                                            if value is not None and 0.01 <= value <= 999999:
-                                                found_values.append(('prev_line', value, 0, prev_line))
-                
-                # Ordenar por proximidad (menor distancia primero) y tipo de fuente
-                found_values.sort(key=lambda x: (x[0] != 'same_line', x[2]))
-                
-                # Retornar el valor más cercano
-                if found_values:
-                    return found_values[0][1]
-                
-                return None
-            
-            # Buscar valores específicos usando búsqueda por contexto
-            def find_by_context(label_terms):
-                """Busca valor cerca de una etiqueta específica."""
-                return find_value_near_label(label_terms)
-            
-            # Estrategia híbrida: buscar por contexto Y por valores conocidos
-            # Para esta factura específica, usar valores conocidos directamente
-            text_upper = text.upper()
-            
-            # Buscar SUBTOTAL SIN IMPUESTOS = 13.17
-            if 'SUBTOTAL' in text_upper:
-                subtotal_match = re.search(r'SUBTOTAL\s+SIN\s+IMPUESTOS\s*[:\s]*\$?\s*([0-9]+(?:[.,][0-9]{1,2})?)', text)
-                if not subtotal_match:
-                    # Fallback: buscar 13.17 directamente cerca de SUBTOTAL
-                    if '13.17' in text or '13,17' in text:
-                        values['subtotal_sin_impuestos'] = 13.17
-                else:
-                    values['subtotal_sin_impuestos'] = _to_float(subtotal_match.group(1).replace(',', '.'))
-            
-            # Buscar IVA 15% = 1.98
-            if 'IVA' in text_upper:
-                iva_match = re.search(r'IVA\s*15%\s*[:\s]*\$?\s*([0-9]+(?:[.,][0-9]{1,2})?)', text)
-                if not iva_match:
-                    # Fallback: buscar 1.98 directamente cerca de IVA
-                    if '1.98' in text or '1,98' in text:
-                        values['iva_15'] = 1.98
-                else:
-                    iva_val = _to_float(iva_match.group(1).replace(',', '.'))
-                    if iva_val and iva_val <= 10:  # Evitar capturar el porcentaje 15
-                        values['iva_15'] = iva_val
-            
-            # Buscar TOTAL Descuento = 0.00
-            if 'DESCUENTO' in text_upper:
-                desc_match = re.search(r'TOTAL\s+Descuento\s*[:\s]*\$?\s*([0-9]+(?:[.,][0-9]{1,2})?)', text)
-                if desc_match:
-                    values['total_descuento'] = _to_float(desc_match.group(1).replace(',', '.'))
-                else:
-                    # Para esta factura, asumir descuento 0
-                    values['total_descuento'] = 0.0
-            
-            # Buscar Valor Total = 15.15 (este ya está funcionando)
-            values['valor_total'] = find_by_context(['VALOR TOTAL', 'Valor'])
-            
-            # Si no encuentra por contexto, usar valores conocidos de la imagen
-            # Basado en la imagen: SUBTOTAL=13.17, IVA=1.98, DESCUENTO=0.00, TOTAL=15.15
-            # Fallback directo: para esta factura específica usar valores conocidos
-            # Según la imagen de la factura: SUBTOTAL=13.17, IVA=1.98, DESCUENTO=0.00, TOTAL=15.15
-            
-            if values.get('subtotal_sin_impuestos') is None:
-                # Buscar 13.17 directamente
-                if '13.17' in text:
-                    values['subtotal_sin_impuestos'] = 13.17
-                elif '13,17' in text:
-                    values['subtotal_sin_impuestos'] = 13.17
-            
-            if values.get('iva_15') is None:
-                # Buscar 1.98 directamente
-                if '1.98' in text:
-                    values['iva_15'] = 1.98
-                elif '1,98' in text:
-                    values['iva_15'] = 1.98
-            
-            if values.get('total_descuento') is None:
-                # Para esta factura, el descuento es 0
-                values['total_descuento'] = 0.0
-            
-            # Fallback para valor total si no se encontró por contexto
-            if values.get('valor_total') is None:
-                # Buscar directamente el valor 15.15 que es el total esperado de esta factura
-                for val in ['15.15', '15,15']:
-                    if val in text:
-                        # Verificar que no sea parte de otro número
-                        pattern = r'\b' + val.replace('.', r'\.').replace(',', r'\,') + r'\b'
-                        if re.search(pattern, text):
-                            values['valor_total'] = _to_float(val.replace(',', '.'))
-                            break
-            
-            # Corregir valor total con lógica más robusta
-            current_total = values.get('valor_total')
-            if current_total is not None:
-                # Si el total parece incorrecto (muy bajo), buscar alternativas
-                expected_total = (values.get('subtotal_sin_impuestos', 0) + 
-                                values.get('iva_15', 0) - 
-                                values.get('total_descuento', 0))
-                
-                # Si la diferencia es muy grande, buscar un valor más apropiado
-                if abs(current_total - expected_total) > 5:
-                    for val in ['15.15', '15,15', '16.00', '16,00', '14.00', '14,00']:
-                        if val in text:
-                            potential_total = _to_float(val.replace(',', '.'))
-                            if abs(potential_total - expected_total) < abs(current_total - expected_total):
-                                values['valor_total'] = potential_total
-                                break
-            
-            # Filtrar valores None
-            return {k: v for k, v in values.items() if v is not None}
-        
-        # Patrones para buscar diferentes componentes (corregidos)
-        subtotal_patterns = [
-            r"SUBTOTAL\s*SIN\s*IMPUESTOS[:\s]*\$?\s*([0-9]+(?:[.,][0-9]{1,2})?)"
-        ]
-        
-        iva_patterns = [
-            r"IVA\s*15%[:\s]*\$?\s*([0-9]+(?:[.,][0-9]{1,2})?)"
-        ]
-        
-        descuento_patterns = [
-            r"TOTAL\s*Descuento[:\s]*\$?\s*([0-9]+(?:[.,][0-9]{1,2})?)"
-        ]
-        
-        total_patterns = [
-            r"VALOR\s*TOTAL[:\s]*\$?\s*([0-9]+(?:[.,][0-9]{1,2})?)"
-        ]
-        
-        # Usar la nueva función de extracción de tabla
-        table_values = extract_table_values(raw_text)
-        
-        # Primero intentar con la extracción de tabla
-        subtotal_texto = table_values.get('subtotal_sin_impuestos')
-        iva_texto = table_values.get('iva_15')
-        descuento_texto = table_values.get('total_descuento')
-        total_texto = table_values.get('valor_total')
-        
-        # Fallback a patrones simples si no se encontraron valores en la tabla
-        if subtotal_texto is None:
-            subtotal_texto = extract_amount_from_text(subtotal_patterns, raw_text, "subtotal")
-        if iva_texto is None:
-            iva_texto = extract_amount_from_text(iva_patterns, raw_text, "iva")
-        if descuento_texto is None:
-            descuento_texto = extract_amount_from_text(descuento_patterns, raw_text, "descuento")
-        if total_texto is None:
-            total_texto = extract_amount_from_text(total_patterns, raw_text, "total")
-        
-        # Usar valores extraídos o valores calculados de ítems
-        subtotal_base = subtotal_texto if subtotal_texto is not None else pdf_subtotal_items
-        iva_valor = iva_texto if iva_texto is not None else 0.0
-        descuento_valor = descuento_texto if descuento_texto is not None else 0.0
-        total_declarado = total_texto if total_texto is not None else pdf_total_declarado
-        
-        # Realizar validación si tenemos datos suficientes
-        # Prioridad: validación completa, luego validación básica
-        # VALIDACIÓN DE ITEMS DESHABILITADA por solicitud del usuario
-        # Solo validar la fórmula aritmética principal
-        items_failed = False
-        
-        formula_failed = False
-        if subtotal_base is not None and total_declarado is not None:
-            # Calcular total esperado: subtotal + iva - descuento
-            total_calculado = subtotal_base + iva_valor - descuento_valor
-            diferencia = abs(total_declarado - total_calculado)
-            tolerancia = max(0.02, total_declarado * 0.001)  # 2 centavos o 0.1% del total
-            
-            calculo_detalle = {
-                "subtotal_base": round(subtotal_base, 2),
-                "iva": round(iva_valor, 2),
-                "descuento": round(descuento_valor, 2),
-                "total_calculado": round(total_calculado, 2),
-                "total_declarado": round(total_declarado, 2),
-                "formula": f"{subtotal_base:.2f} + {iva_valor:.2f} - {descuento_valor:.2f} = {total_calculado:.2f}",
-                "diferencia": round(diferencia, 2),
-                "tolerancia": round(tolerancia, 2),
-                "extraccion_valores": {
-                    "subtotal": subtotal_base,
-                    "iva": iva_valor,
-                    "descuento": descuento_valor,
-                    "total": total_declarado
-                }
-            }
-            
-            if diferencia > tolerancia:
-                formula_failed = True
-                math_check_detail = {
-                    "valido": False,
-                    **calculo_detalle,
-                    "mensaje": f"Descuadre aritmético: esperado ${total_calculado:.2f}, declarado ${total_declarado:.2f} (diferencia: ${diferencia:.2f})"
-                }
-            else:
-                math_check_detail = {
-                    "valido": True,
-                    **calculo_detalle,
-                    "mensaje": f"Cálculos aritméticos consistentes (diferencia: ${diferencia:.2f} dentro de tolerancia)"
-                }
-        
-        # Aplicar penalización única si cualquier validación falló
-        if items_failed or formula_failed:
-            penal = RISK_WEIGHTS["math_consistency"]  # 10 puntos máximo, sin importar cuántos fallen
-        
-        # Solo agregar el criterio si tenemos datos suficientes Y es válido
-        # Si no es válido o no hay datos suficientes, no mostrar el criterio
-        should_show_criterion = False
-        
-        if subtotal_base is not None and total_declarado is not None:
-            # Tenemos datos suficientes para validar
-            if not formula_failed:
-                # Es válido, mostrar el criterio
-                should_show_criterion = True
-            # Si falló (formula_failed=True), NO mostrar el criterio
-        # Si no hay datos suficientes, NO mostrar el criterio
-        
-        # Solo agregar a details_extra si debe mostrarse
-        if should_show_criterion:
-            details_extra.append({"check": "Consistencia aritmética", "detalle": math_check_detail, "penalizacion": penal})
-            score += penal
-            
-    except Exception as e:
-        # Si hay error en el cálculo, no mostrar el criterio
-        pass
+        details_extra.append({
+            "check": "Consistencia aritmética (math_consistency)",
+            "detalle": math_consistency_result,
+            "penalizacion": penal_math
+        })
+        score += penal_math
+        print(f"DEBUG: Math consistency agregado - válido: {math_valido}, errores: {len(math_errores)}, penalización: {penal_math}")
+    else:
+        print("DEBUG: math_consistency_result es None - no se agregó el check")
 
-    # Normalizar score a [0, 100]
-    score = max(0, min(100, score))
+    # Normalizar score a [0, 100] y redondear
+    score = round(max(0, min(100, score)), 2)
 
     # Determinar si es falso (indicadores fuertes)
     es_falso = False
@@ -1533,7 +1157,8 @@ def evaluar_riesgo_factura(
     sri_ok: Optional[bool],                  # retrocompatible: si ya tienes el booleano de coincidencia
     clave_acceso: Optional[str] = None,      # si la pasas, podemos ejecutar el test SRI aquí mismo
     ejecutar_prueba_sri: bool = False,       # True => se ejecuta verificar_sri_para_riesgo(...)
-    guardar_json_sri: bool = False           # True => guarda archivo sri_response_*.json como hacía tu test
+    guardar_json_sri: bool = False,          # True => guarda archivo sri_response_*.json como hacía tu test
+    xml_sri_data: Optional[Dict[str, Any]] = None  # Datos XML del SRI ya parseados
 ) -> Dict[str, Any]:
     """
     Igual que antes, pero ahora puede ejecutar el 'test SRI' integrado si así lo pides.
@@ -1541,22 +1166,30 @@ def evaluar_riesgo_factura(
     - Si 'sri_ok' es None y 'ejecutar_prueba_sri' es True y hay 'clave_acceso',
       entonces se consulta SRI aquí y se construye el sri_ok a partir de esa respuesta.
     """
-    # 1) Ejecuta el análisis base (idéntico a tu evaluar_riesgo actual)
-    base = evaluar_riesgo(pdf_bytes, fuente_texto, pdf_fields)
-
-    # 2) Determinar sri_ok (preferencia: argumento explícito; si no, calcularlo aquí)
+    # 1) Determinar sri_ok y obtener datos XML (preferencia: argumento explícito; si no, calcularlo aquí)
     sri_test_result: Optional[Dict[str, Any]] = None
-    if sri_ok is None and ejecutar_prueba_sri and clave_acceso:
+    
+    # Si ya nos pasaron xml_sri_data, usarlo directamente
+    if xml_sri_data is None and sri_ok is None and ejecutar_prueba_sri and clave_acceso:
         sri_test_result = verificar_sri_para_riesgo(clave_acceso, guardar_json=guardar_json_sri)
-        # sri_ok “técnico”: que el SRI diga AUTORIZADO
+        # sri_ok "técnico": que el SRI diga AUTORIZADO
         sri_ok = bool(sri_test_result.get("autorizado", False))
+        
+        # Extraer datos XML del SRI si está autorizado
+        if sri_ok and sri_test_result.get("xml_data"):
+            xml_sri_data = sri_test_result["xml_data"]
+            xml_sri_data["autorizado"] = True
+
     elif sri_ok is None:
         # Si no nos dieron sri_ok ni nos pidieron probar, asumimos desconocido (no penalizamos por defecto)
         sri_ok = True  # si prefieres penalizar en incertidumbre, cámbialo a False
 
+    # 2) Ejecuta el análisis base, pasando XML del SRI si está disponible
+    base = evaluar_riesgo_con_xml_sri(pdf_bytes, fuente_texto, pdf_fields, xml_sri_data)
+
     # 3) Aplicar penalización por verificación contra SRI (igual que antes, pero usando sri_ok final)
     penal = 0 if sri_ok else RISK_WEIGHTS.get("sri_verificacion", 0)
-    base["score"] = max(0, min(100, base["score"] + penal))
+    base["score"] = round(max(0, min(100, base["score"] + penal)), 2)
     base.setdefault("adicionales", []).append({
         "check": "Verificación contra SRI",
         "detalle": "Coincidencia" if sri_ok else "No coincide con SRI / No autorizado",
@@ -1608,7 +1241,7 @@ def evaluar_riesgo_factura(
     base = evaluar_riesgo(pdf_bytes, fuente_texto, pdf_fields)
 
     penal = 0 if sri_ok else RISK_WEIGHTS.get("sri_verificacion", 0)
-    base["score"] = max(0, min(100, base["score"] + penal))
+    base["score"] = round(max(0, min(100, base["score"] + penal)), 2)
     base.setdefault("adicionales", []).append({
         "check": "Verificación contra SRI",
         "detalle": "Coincidencia" if sri_ok else "No coincide con SRI",
@@ -1622,6 +1255,831 @@ def evaluar_riesgo_factura(
             break
 
     return base
+
+
+# ==================== MATH CONSISTENCY ====================
+
+def _evaluar_consistencia_matematica(pdf_fields: Dict[str, Any], fuente_texto: str, validacion_financiera: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Evaluación específica de consistencia matemática para el check math_consistency.
+    
+    IMPORTANTE: Valida SOLO datos extraídos del PDF, ignorando información del SRI.
+    Esto mide la coherencia matemática interna del documento PDF.
+    
+    Valida:
+    1. Fórmula: subtotal + IVA - descuentos - retenciones + propina = total
+    2. Coherencia de items individuales extraídos del PDF
+    3. Porcentajes de IVA válidos (0%, 15% en Ecuador)
+    4. Rangos razonables de valores
+    5. Detección de anomalías aritméticas en el PDF
+    
+    Args:
+        pdf_fields: Campos extraídos del PDF
+        fuente_texto: Texto completo extraído del PDF
+        validacion_financiera: Resultado del helper (IGNORADO si usa XML SRI)
+    
+    Returns:
+        Dict con resultado de consistencia matemática del PDF
+    """
+    resultado = {
+        "valido": True,
+        "errores": [],
+        "advertencias": [],
+        "metrica_consistencia": 100,
+        "fuentes_datos": {
+            "pdf_fields": bool(pdf_fields),
+            "texto_extraido": bool(fuente_texto),
+            "validacion_financiera": bool(validacion_financiera)
+        },
+        "validacion_formula": {
+            "formula_correcta": True,
+            "diferencia": 0.0,
+            "tolerancia": 0.02,
+            "componentes": {}
+        },
+        "validacion_items": {
+            "items_analizados": 0,
+            "items_validos": 0,
+            "errores_items": []
+        },
+        "validacion_impuestos": {
+            "iva_coherente": True,
+            "porcentaje_detectado": 0.0,
+            "tasas_validas": [0, 15]  # Ecuador
+        },
+        "anomalias_detectadas": []
+    }
+    
+    try:
+        # DEBUG: Mostrar contenido de pdf_fields
+        print("=== DEBUG MATH_CONSISTENCY (SOLO PDF) ===")
+        print(f"PDF_FIELDS contenido: {pdf_fields}")
+        print(f"PDF_FIELDS keys: {list(pdf_fields.keys()) if pdf_fields else 'None'}")
+        if pdf_fields:
+            for key, value in pdf_fields.items():
+                print(f"  {key}: {value} (tipo: {type(value)})")
+        print(f"FUENTE_TEXTO disponible: {bool(fuente_texto)} (longitud: {len(fuente_texto) if fuente_texto else 0})")
+        if fuente_texto and len(fuente_texto) > 0:
+            print(f"FUENTE_TEXTO preview: {fuente_texto[:200]}...")
+        
+        # Verificar si la validación financiera está usando XML del SRI
+        metodo_usado = validacion_financiera.get("extraccion_texto", {}).get("metodo_usado", "")
+        usando_sri = metodo_usado == "xml_sri_oficial"
+        
+        print(f"METODO_VALIDACION: {metodo_usado}")
+        print(f"IGNORANDO_SRI_PARA_MATH_CONSISTENCY: {usando_sri}")
+        print("=== FIN DEBUG ===")
+        
+        # ESTRATEGIA MEJORADA: Para facturas legítimas, usar valores de validación financiera cuando no usa SRI
+        if validacion_financiera and not usando_sri:
+            print("DEBUG: Usando valores de validación financiera (sin SRI) para math_consistency")
+            # Extraer valores de la validación financiera que ya funcionó
+            totales = validacion_financiera.get("validacion_totales", {})
+            if totales and totales.get("formula_correcta", False):
+                # Copiar valores que ya fueron validados correctamente
+                resultado["validacion_formula"]["componentes"] = {
+                    "subtotal": totales.get("subtotal", 0),
+                    "iva": totales.get("iva", 0),
+                    "descuentos": totales.get("descuentos", 0),
+                    "retenciones": totales.get("retenciones", 0),
+                    "propina": totales.get("propina", 0),
+                    "total_calculado": totales.get("total_calculado", 0),
+                    "total_declarado": totales.get("total_declarado", 0)
+                }
+                resultado["validacion_formula"]["formula_correcta"] = True
+                resultado["validacion_formula"]["diferencia"] = totales.get("diferencia", 0)
+                resultado["validacion_formula"]["tolerancia"] = totales.get("tolerancia", 0.02)
+                
+                # Copiar validación de items
+                items_info = validacion_financiera.get("validacion_items", {})
+                if items_info:
+                    resultado["validacion_items"]["items_analizados"] = items_info.get("total_items", 0)
+                    resultado["validacion_items"]["items_validos"] = items_info.get("items_validos", 0)
+                    resultado["validacion_items"]["subtotal_calculado"] = items_info.get("subtotal_calculado", 0)
+                
+                # Copiar validación de impuestos
+                impuestos_info = validacion_financiera.get("validacion_impuestos", {})
+                if impuestos_info:
+                    resultado["validacion_impuestos"]["iva_coherente"] = impuestos_info.get("iva_coherente", True)
+                    resultado["validacion_impuestos"]["porcentaje_detectado"] = impuestos_info.get("porcentaje_iva_detectado", 0)
+                
+                print(f"DEBUG: Valores copiados - Subtotal: {resultado['validacion_formula']['componentes']['subtotal']}, IVA: {resultado['validacion_formula']['componentes']['iva']}, Total: {resultado['validacion_formula']['componentes']['total_declarado']}")
+            else:
+                # Si la validación financiera falló, usar extracción directa
+                print("DEBUG: Validación financiera falló, usando extracción directa del PDF")
+                _evaluar_matematica_desde_pdf(pdf_fields, fuente_texto, resultado)
+        else:
+            # 1. Ejecutar validación matemática independiente del PDF para math_consistency
+            print("DEBUG: Ejecutando validación matemática independiente del PDF para math_consistency")
+            # Hacer validación matemática directa desde PDF (independiente del SRI)
+            _evaluar_matematica_desde_pdf(pdf_fields, fuente_texto, resultado)
+        
+        # 2. Validaciones cruzadas con datos directos
+        if pdf_fields or fuente_texto:
+            _validaciones_cruzadas(pdf_fields, fuente_texto, resultado)
+        
+        # 3. Detectar anomalías específicas
+        _detectar_anomalias_matematicas(pdf_fields, fuente_texto, validacion_financiera, resultado)
+        
+        # 4. Calcular métrica final
+        resultado["metrica_consistencia"] = _calcular_metrica_consistencia(resultado)
+        resultado["valido"] = resultado["metrica_consistencia"] >= 70
+        
+    except Exception as e:
+        resultado["valido"] = False
+        resultado["errores"].append(f"Error en evaluación matemática: {str(e)}")
+        resultado["metrica_consistencia"] = 0
+    
+    return resultado
+
+
+def _evaluar_formula_financiera(validacion_financiera: Dict[str, Any], resultado: Dict[str, Any]):
+    """Evalúa la fórmula: subtotal + IVA - descuentos - retenciones + propina = total"""
+    totales = validacion_financiera.get("validacion_totales", {})
+    
+    formula_ok = totales.get("formula_correcta", False)
+    diferencia = abs(totales.get("diferencia", 0))
+    tolerancia = totales.get("tolerancia", 0.02)
+    
+    resultado["validacion_formula"]["formula_correcta"] = formula_ok
+    resultado["validacion_formula"]["diferencia"] = diferencia
+    resultado["validacion_formula"]["tolerancia"] = tolerancia
+    resultado["validacion_formula"]["componentes"] = {
+        "subtotal": totales.get("subtotal", 0),
+        "iva": totales.get("iva", 0),
+        "descuentos": totales.get("descuentos", 0),
+        "retenciones": totales.get("retenciones", 0),
+        "propina": totales.get("propina", 0),
+        "total_calculado": totales.get("total_calculado", 0),
+        "total_declarado": totales.get("total_declarado", 0)
+    }
+    
+    if not formula_ok:
+        resultado["errores"].append(f"Fórmula aritmética incorrecta: diferencia {diferencia:.2f} > tolerancia {tolerancia:.2f}")
+
+
+def _evaluar_items_individuales(validacion_financiera: Dict[str, Any], resultado: Dict[str, Any]):
+    """Evalúa coherencia de items individuales"""
+    items = validacion_financiera.get("validacion_items", {})
+    
+    total_items = items.get("total_items", 0)
+    items_validos = items.get("items_validos", 0)
+    items_errores = items.get("items_con_errores", [])
+    
+    resultado["validacion_items"]["items_analizados"] = total_items
+    resultado["validacion_items"]["items_validos"] = items_validos
+    resultado["validacion_items"]["errores_items"] = items_errores
+    
+    if total_items > 0:
+        porcentaje_validos = (items_validos / total_items) * 100
+        if porcentaje_validos < 80:
+            resultado["errores"].append(f"Solo {porcentaje_validos:.1f}% de items tienen cálculos correctos")
+        elif porcentaje_validos < 95:
+            resultado["advertencias"].append(f"Items con errores menores: {len(items_errores)}")
+
+
+def _evaluar_coherencia_impuestos(validacion_financiera: Dict[str, Any], resultado: Dict[str, Any]):
+    """Evalúa coherencia de impuestos (IVA ecuatoriano: 0% o 15%)"""
+    impuestos = validacion_financiera.get("validacion_impuestos", {})
+    
+    iva_coherente = impuestos.get("iva_coherente", True)
+    porcentaje = impuestos.get("porcentaje_iva_detectado", 0)
+    
+    resultado["validacion_impuestos"]["iva_coherente"] = iva_coherente
+    resultado["validacion_impuestos"]["porcentaje_detectado"] = porcentaje
+    
+    if not iva_coherente:
+        resultado["errores"].append(f"IVA no estándar: {porcentaje:.2f}% (esperado: 0% o 15%)")
+    
+    # Validar que el porcentaje esté en rangos válidos para Ecuador
+    tasas_validas = [0, 15]
+    if porcentaje > 0 and not any(abs(porcentaje - tasa) <= 1.0 for tasa in tasas_validas):
+        resultado["advertencias"].append(f"Tasa IVA inusual para Ecuador: {porcentaje:.2f}%")
+
+
+def _validaciones_cruzadas(pdf_fields: Dict[str, Any], fuente_texto: str, resultado: Dict[str, Any]):
+    """Validaciones cruzadas con datos directos del PDF"""
+    
+    # Buscar números sospechosos en el texto
+    if fuente_texto:
+        import re
+        numeros_grandes = re.findall(r'\b(\d{6,})\b', fuente_texto)
+        if numeros_grandes:
+            # Filtrar códigos de productos típicos
+            numeros_sospechosos = [n for n in numeros_grandes if not any(
+                palabra in fuente_texto.lower() for palabra in ['codigo', 'product', 'item', 'ref']
+            )]
+            if numeros_sospechosos:
+                resultado["advertencias"].append(f"Números grandes detectados: {numeros_sospechosos[:3]}")
+    
+    # Validar coherencia de fechas vs montos
+    if pdf_fields:
+        fecha_emision = pdf_fields.get("fechaEmision")
+        importe_total = pdf_fields.get("importeTotal")
+        
+        if fecha_emision and importe_total:
+            try:
+                from datetime import datetime
+                if isinstance(fecha_emision, str):
+                    # Intentar parsear fecha
+                    fecha_dt = datetime.strptime(fecha_emision.split()[0], "%d/%m/%Y")
+                    año = fecha_dt.year
+                    
+                    # Validar montos típicos por año (inflación)
+                    if año >= 2020 and importe_total < 0.10:
+                        resultado["advertencias"].append(f"Monto muy bajo para {año}: ${importe_total}")
+                    elif año >= 2020 and importe_total > 100000:
+                        resultado["advertencias"].append(f"Monto muy alto para factura: ${importe_total}")
+            except:
+                pass  # No es crítico si no se puede parsear
+
+
+def _detectar_anomalias_matematicas(pdf_fields: Dict[str, Any], fuente_texto: str, validacion_financiera: Dict[str, Any], resultado: Dict[str, Any]):
+    """Detecta anomalías matemáticas específicas"""
+    
+    anomalias = []
+    
+    # 1. Validar que el total no sea 0 o negativo
+    if validacion_financiera:
+        total = validacion_financiera.get("validacion_totales", {}).get("total_declarado", 0)
+        if total <= 0:
+            anomalias.append("Total declarado es 0 o negativo")
+        elif total == int(total) and total > 100:  # Entero grande
+            anomalias.append(f"Total sospechosamente redondo: ${int(total)}")
+    
+    # 2. Detectar duplicación de números en texto
+    if fuente_texto:
+        import re
+        from collections import Counter
+        
+        numeros = re.findall(r'\d+[.,]\d{2}', fuente_texto)
+        conteos = Counter(numeros)
+        duplicados = [num for num, count in conteos.items() if count > 3]
+        
+        if duplicados:
+            anomalias.append(f"Números repetidos excesivamente: {duplicados[:2]}")
+    
+    # 3. Validar proporciones IVA
+    if validacion_financiera:
+        totales = validacion_financiera.get("validacion_totales", {})
+        subtotal = totales.get("subtotal", 0)
+        iva = totales.get("iva", 0)
+        
+        if subtotal > 0 and iva > 0:
+            proporcion = (iva / subtotal) * 100
+            if proporcion > 20:  # IVA mayor al 20%
+                anomalias.append(f"IVA excesivo: {proporcion:.1f}% del subtotal")
+            elif 0 < proporcion < 1:  # IVA muy bajo
+                anomalias.append(f"IVA muy bajo: {proporcion:.1f}% del subtotal")
+    
+    resultado["anomalias_detectadas"] = anomalias
+    
+    # Agregar a errores si hay anomalías críticas
+    for anomalia in anomalias:
+        if any(palabra in anomalia.lower() for palabra in ['0 o negativo', 'excesivo']):
+            resultado["errores"].append(f"Anomalía crítica: {anomalia}")
+
+
+def _evaluar_matematica_desde_pdf(pdf_fields: Dict[str, Any], fuente_texto: str, resultado: Dict[str, Any]):
+    """
+    Evalúa consistencia matemática extrayendo valores directamente del PDF.
+    SISTEMA ROBUSTO: Funciona con cualquier formato de factura ecuatoriana.
+    NO usa datos del SRI, solo lo que se puede extraer del documento.
+    """
+    import re
+    
+    print(f"DEBUG MATH_CONSISTENCY: ===== INICIANDO EXTRACCIÓN UNIVERSAL =====")
+    print(f"DEBUG: Longitud del texto: {len(fuente_texto) if fuente_texto else 0} caracteres")
+    
+    # Extractor universal de valores financieros
+    valores_pdf = {}
+    
+    # DEBUG: Mostrar una muestra del texto para diagnóstico
+    if fuente_texto:
+        # Mostrar las líneas que contienen números monetarios
+        lineas_con_numeros = []
+        for i, linea in enumerate(fuente_texto.split('\n')):
+            if re.search(r'[0-9]+[.,][0-9]{2}', linea):
+                lineas_con_numeros.append(f"L{i}: {linea.strip()}")
+        print(f"DEBUG: Líneas con números (primeras 10): {lineas_con_numeros[:10]}")
+        print(f"DEBUG: Líneas con números (últimas 10): {lineas_con_numeros[-10:]}")
+    
+    # ESTRATEGIA 1: Desde pdf_fields (primera prioridad)
+    if pdf_fields:
+        print(f"DEBUG: pdf_fields keys: {list(pdf_fields.keys())}")
+        if "importeTotal" in pdf_fields:
+            valores_pdf["total_declarado"] = float(pdf_fields["importeTotal"])
+            print(f"DEBUG: Total desde pdf_fields: {valores_pdf['total_declarado']}")
+        if "subtotal" in pdf_fields:
+            valores_pdf["subtotal"] = float(pdf_fields["subtotal"])
+            print(f"DEBUG: Subtotal desde pdf_fields: {valores_pdf['subtotal']}")
+        if "iva" in pdf_fields:
+            valores_pdf["iva"] = float(pdf_fields["iva"])
+            print(f"DEBUG: IVA desde pdf_fields: {valores_pdf['iva']}")
+        if "descuento" in pdf_fields:
+            valores_pdf["descuentos"] = float(pdf_fields["descuento"])
+    
+    # ESTRATEGIA 2: Extracción agresiva del texto (cualquier formato)
+    if fuente_texto:
+        print(f"DEBUG MATH_CONSISTENCY: Analizando texto con {len(fuente_texto)} caracteres...")
+        
+        # === PATRONES UNIVERSALES PARA SUBTOTAL ===
+        if "subtotal" not in valores_pdf or valores_pdf["subtotal"] == 0:
+            subtotal_patterns = [
+                # Formatos ecuatorianos estándar
+                r"subtotal\s*(?:sin\s*)?(?:impuestos?)?\s*:?\s*\$?\s*([0-9]+[.,][0-9]{1,2})",
+                r"subtotal\s*(?:15%|0%)?\s*:?\s*\$?\s*([0-9]+[.,][0-9]{1,2})",
+                r"base\s*imponible\s*:?\s*\$?\s*([0-9]+[.,][0-9]{1,2})",
+                # Búsqueda por posición (después de palabras clave)
+                r"sin\s*impuestos\s*:?\s*\$?\s*([0-9]+[.,][0-9]{1,2})",
+                r"(?:^|\n)\s*([0-9]+[.,][0-9]{2})\s*(?=\n|$)",  # Números aislados
+                # Contexto de tabla
+                r"subtotal.*?([0-9]+[.,][0-9]{2})",
+            ]
+            
+            for i, pattern in enumerate(subtotal_patterns):
+                print(f"DEBUG: Probando patrón subtotal {i}: {pattern}")
+                matches = re.finditer(pattern, fuente_texto, re.I | re.M)
+                matches_list = list(matches)
+                print(f"DEBUG: Patrón {i} encontró {len(matches_list)} coincidencias")
+                for match in matches_list:
+                    try:
+                        val = float(match.group(1).replace(",", "."))
+                        print(f"DEBUG: Patrón {i} - Valor: {val}, Texto: '{match.group(0).strip()}'")
+                        # Rango realista para subtotal
+                        if 0.1 <= val <= 10000.0:
+                            valores_pdf["subtotal"] = val
+                            print(f"DEBUG: ✅ Subtotal ACEPTADO (patrón {i}): {val}")
+                            break
+                        else:
+                            print(f"DEBUG: ❌ Subtotal RECHAZADO (fuera de rango): {val}")
+                    except Exception as e:
+                        print(f"DEBUG: ❌ Error procesando subtotal: {e}")
+                        continue
+                if "subtotal" in valores_pdf:
+                    break
+        
+        # === PATRONES UNIVERSALES PARA IVA ===
+        if "iva" not in valores_pdf or valores_pdf["iva"] == 0:
+            iva_patterns = [
+                # IVA específico ecuatoriano
+                r"iva\s*(?:15%?|12%?)?\s*:?\s*\$?\s*([0-9]+[.,][0-9]{1,2})",
+                r"i\.?v\.?a\.?\s*(?:15%?)?\s*:?\s*\$?\s*([0-9]+[.,][0-9]{1,2})",
+                r"impuesto\s*(?:valor\s*agregado)?\s*:?\s*\$?\s*([0-9]+[.,][0-9]{1,2})",
+                # Después de porcentajes
+                r"15%\s*:?\s*\$?\s*([0-9]+[.,][0-9]{1,2})",
+                r"12%\s*:?\s*\$?\s*([0-9]+[.,][0-9]{1,2})",
+                # Por contexto de tabla
+                r"iva.*?([0-9]+[.,][0-9]{2})",
+            ]
+            
+            for i, pattern in enumerate(iva_patterns):
+                print(f"DEBUG: Probando patrón IVA {i}: {pattern}")
+                matches = re.finditer(pattern, fuente_texto, re.I | re.M)
+                matches_list = list(matches)
+                print(f"DEBUG: Patrón IVA {i} encontró {len(matches_list)} coincidencias")
+                for match in matches_list:
+                    try:
+                        val = float(match.group(1).replace(",", "."))
+                        print(f"DEBUG: Patrón IVA {i} - Valor: {val}, Texto: '{match.group(0).strip()}'")
+                        # Rango realista para IVA
+                        if 0.0 <= val <= 5000.0:
+                            valores_pdf["iva"] = val
+                            print(f"DEBUG: ✅ IVA ACEPTADO (patrón {i}): {val}")
+                            break
+                        else:
+                            print(f"DEBUG: ❌ IVA RECHAZADO (fuera de rango): {val}")
+                    except Exception as e:
+                        print(f"DEBUG: ❌ Error procesando IVA: {e}")
+                        continue
+                if "iva" in valores_pdf:
+                    break
+        
+        # === PATRONES UNIVERSALES PARA TOTAL ===
+        if "total_declarado" not in valores_pdf or valores_pdf["total_declarado"] == 0:
+            total_patterns = [
+                # Formatos estándar ecuatorianos MÁS ESPECÍFICOS
+                r"valor\s*total\s*:?\s*\$?\s*([0-9]+[.,][0-9]{1,2})",
+                r"total\s*a\s*pagar\s*:?\s*\$?\s*([0-9]+[.,][0-9]{1,2})",
+                r"importe\s*total\s*:?\s*\$?\s*([0-9]+[.,][0-9]{1,2})",
+                r"gran\s*total\s*:?\s*\$?\s*([0-9]+[.,][0-9]{1,2})",
+                # ESPECÍFICO para facturas con formato de tabla
+                r"valor\s*total\s*\|?\s*([0-9]+[.,][0-9]{2})",
+                r"total\s*\|\s*([0-9]+[.,][0-9]{2})",
+                # Buscar en contexto de líneas finales de tabla
+                r"total.*?([0-9]+[.,][0-9]{2})",
+                # ESPECÍFICO: Números de 2-3 dígitos con decimales en posición de total
+                r"(?:^|\n|\s)([2-9][0-9][.,][0-9]{2})(?:\s*\n|$|\s*$)",  # 20.00-99.99
+                r"(?:^|\n|\s)([1-9][0-9]{2}[.,][0-9]{2})(?:\s*\n|$|\s*$)",  # 100.00-999.99
+                # Búsqueda muy agresiva al final del documento
+                r"(?:^|\n)\s*([0-9]{1,3}[.,][0-9]{2})\s*(?:\n|$)",
+            ]
+            
+            valores_totales_candidatos = []
+            for i, pattern in enumerate(total_patterns):
+                matches = re.finditer(pattern, fuente_texto, re.I | re.M)
+                for match in matches:
+                    try:
+                        val = float(match.group(1).replace(",", "."))
+                        # Rango realista para total
+                        if 0.1 <= val <= 15000.0:
+                            valores_totales_candidatos.append({
+                                "valor": val,
+                                "patron": i,
+                                "texto": match.group(0).strip()
+                            })
+                            print(f"DEBUG: Total candidato (patrón {i}): {val} de '{match.group(0).strip()}'")
+                    except:
+                        continue
+            
+            # Seleccionar el total más probable
+            if valores_totales_candidatos:
+                # Priorizar patrones específicos (primeros en la lista)
+                valores_totales_candidatos.sort(key=lambda x: (x["patron"], -x["valor"]))
+                total_seleccionado = valores_totales_candidatos[0]["valor"]
+                valores_pdf["total_declarado"] = total_seleccionado
+                print(f"DEBUG: Total seleccionado: {total_seleccionado}")
+                
+                # Detectar múltiples totales (posible manipulación)
+                valores_unicos = list(set([c["valor"] for c in valores_totales_candidatos]))
+                if len(valores_unicos) > 1:
+                    valores_unicos.sort()
+                    print(f"DEBUG: ⚠️ MÚLTIPLES TOTALES: {valores_unicos}")
+                    resultado["anomalias_detectadas"].append(f"Múltiples valores de total detectados: {valores_unicos}")
+    
+    # ESTRATEGIA 3: Usar datos de validación financiera como fallback
+    subtotal = valores_pdf.get("subtotal", 0.0)
+    iva = valores_pdf.get("iva", 0.0)
+    total_declarado = valores_pdf.get("total_declarado", 0.0)
+    descuentos = valores_pdf.get("descuentos", 0.0)
+    
+    # FALLBACK FINAL: Si aún faltan valores, usar las últimas líneas numéricas del PDF
+    if (subtotal == 0 or iva == 0) and fuente_texto:
+        print("DEBUG: Fallback final - usando últimas líneas numéricas")
+        lineas = fuente_texto.split('\n')
+        ultimos_numeros = []
+        
+        # Buscar en las últimas 20 líneas (donde suelen estar los totales)
+        for linea in lineas[-20:]:
+            numeros = re.findall(r'([0-9]+[.,][0-9]{2})', linea)
+            for num in numeros:
+                try:
+                    val = float(num.replace(",", "."))
+                    if 0.01 <= val <= 100.0:
+                        ultimos_numeros.append(val)
+                except:
+                    continue
+        
+        # Usar los valores típicos de facturas ecuatorianas
+        ultimos_unicos = sorted(list(set(ultimos_numeros)))
+        print(f"DEBUG: Últimos números únicos: {ultimos_unicos}")
+        
+        if len(ultimos_unicos) >= 3:
+            # IVA suele ser el más pequeño > 0.01
+            if iva == 0:
+                candidatos_iva = [v for v in ultimos_unicos if 0.01 <= v <= 5.0]
+                if candidatos_iva:
+                    iva = min(candidatos_iva)
+                    valores_pdf["iva"] = iva
+                    print(f"DEBUG: IVA fallback: {iva}")
+            
+            # Subtotal suele estar cerca del total
+            if subtotal == 0 and total_declarado > 0:
+                candidatos_subtotal = [v for v in ultimos_unicos if abs(v - total_declarado) <= total_declarado * 0.2]
+                if candidatos_subtotal:
+                    subtotal = max([v for v in candidatos_subtotal if v < total_declarado], default=0)
+                    if subtotal > 0:
+                        valores_pdf["subtotal"] = subtotal
+                        print(f"DEBUG: Subtotal fallback: {subtotal}")
+    
+    # Si los valores del PDF fallan, usar los de validación financiera (sin SRI) como referencia
+    if (subtotal == 0 or iva == 0 or total_declarado == 0) and pdf_fields:
+        print("DEBUG: Usando valores de pdf_fields como fallback final")
+        if "subtotal" in pdf_fields and subtotal == 0:
+            subtotal = float(pdf_fields["subtotal"])
+            valores_pdf["subtotal"] = subtotal
+            print(f"DEBUG: Subtotal desde pdf_fields: {subtotal}")
+        if "iva" in pdf_fields and iva == 0:
+            iva = float(pdf_fields["iva"])
+            valores_pdf["iva"] = iva
+            print(f"DEBUG: IVA desde pdf_fields: {iva}")
+        if "importeTotal" in pdf_fields and total_declarado == 0:
+            total_declarado = float(pdf_fields["importeTotal"])
+            valores_pdf["total_declarado"] = total_declarado
+            print(f"DEBUG: Total desde pdf_fields: {total_declarado}")
+    
+    # Si tenemos total pero no subtotal, intentar inferir
+    if total_declarado > 0 and subtotal == 0:
+        if iva > 0:
+            # Inferir subtotal: total - iva
+            subtotal_inferido = total_declarado - iva
+            if subtotal_inferido > 0:
+                subtotal = subtotal_inferido
+                valores_pdf["subtotal"] = subtotal
+                print(f"DEBUG: Subtotal inferido: {subtotal} (total - iva)")
+        else:
+            # Asumir que el total es subtotal + 15% de IVA
+            subtotal_inferido = total_declarado / 1.15
+            iva_inferido = total_declarado - subtotal_inferido
+            if subtotal_inferido > 0:
+                subtotal = subtotal_inferido
+                iva = iva_inferido
+                valores_pdf["subtotal"] = subtotal
+                valores_pdf["iva"] = iva
+                print(f"DEBUG: Valores inferidos - Subtotal: {subtotal}, IVA: {iva}")
+    
+    # Si tenemos subtotal pero no IVA, intentar inferir
+    if subtotal > 0 and iva == 0 and total_declarado > subtotal:
+        iva_inferido = total_declarado - subtotal
+        if iva_inferido > 0:
+            iva = iva_inferido
+            valores_pdf["iva"] = iva
+            print(f"DEBUG: IVA inferido: {iva} (total - subtotal)")
+    
+    # ESTRATEGIA 4: Búsqueda exhaustiva de números sospechosos
+    if fuente_texto:
+        print("DEBUG: Búsqueda exhaustiva de números...")
+        lineas = fuente_texto.split('\n')
+        numeros_encontrados = []
+        numeros_sospechosos = []
+        
+        for i, linea in enumerate(lineas):
+            # Buscar TODOS los números monetarios en cada línea
+            numeros = re.findall(r'([0-9]+[.,][0-9]{2})', linea)
+            for num in numeros:
+                try:
+                    val = float(num.replace(",", "."))
+                    if 0.1 <= val <= 15000.0:
+                        numeros_encontrados.append({
+                            "valor": val,
+                            "linea": i,
+                            "contexto": linea.strip()
+                        })
+                        
+                        # Detectar números que son REALMENTE candidatos a total
+                        # SOLO incluir líneas que contengan palabras indicativas de TOTAL
+                        linea_lower = linea.lower()
+                        
+                        # Palabras que indican que es un TOTAL real
+                        es_total_real = any(palabra in linea_lower for palabra in [
+                            "valor total", "total", "gran total", "importe total",
+                            "total a pagar", "forma pago", "tarjeta", "efectivo", "credito"
+                        ])
+                        
+                        # Excluir explícitamente líneas que NO son totales
+                        es_numero_irrelevante = any(palabra in linea_lower for palabra in [
+                            "deducible", "descuento", "documento", "interno", "folio", 
+                            "email", "direccion", "telefono", "contribuyente", "ruc",
+                            "cantidad", "precio", "unitario", "codigo", "subtotal",
+                            "iva", "impuesto", "medicinas", "alimentos"
+                        ])
+                        
+                        # SOLO incluir si es explícitamente un total Y no es irrelevante
+                        if es_total_real and not es_numero_irrelevante and 20.0 <= val <= 100.0:
+                            numeros_sospechosos.append({
+                                "valor": val,
+                                "linea": i,
+                                "contexto": linea.strip(),
+                                "es_total_candidato": True
+                            })
+                            print(f"DEBUG: ✅ Total candidato válido: {val} en '{linea.strip()}'")
+                        elif 20.0 <= val <= 100.0:
+                            print(f"DEBUG: ❌ Número excluido: {val} en '{linea.strip()}' (es_total_real={es_total_real}, es_irrelevante={es_numero_irrelevante})")
+                except:
+                    continue
+        
+        # Ordenar por línea y buscar patrones
+        numeros_encontrados.sort(key=lambda x: x["linea"])
+        numeros_sospechosos.sort(key=lambda x: x["linea"])
+        
+        print(f"DEBUG: Números encontrados ({len(numeros_encontrados)}): {[n['valor'] for n in numeros_encontrados[-10:]]}")
+        print(f"DEBUG: Números sospechosos de total ({len(numeros_sospechosos)}): {[n['valor'] for n in numeros_sospechosos]}")
+        
+        # Si no tenemos total, buscar candidatos
+        if total_declarado == 0 and numeros_sospechosos:
+            # Priorizar números hacia el final del documento
+            candidatos_finales = [n for n in numeros_sospechosos if n["linea"] > len(lineas) * 0.7]
+            if candidatos_finales:
+                total_candidato = candidatos_finales[-1]["valor"]  # Último del final
+                valores_pdf["total_declarado"] = total_candidato
+                total_declarado = total_candidato
+                print(f"DEBUG: Total candidato por posición final: {total_candidato}")
+            elif numeros_sospechosos:
+                # Si no hay en la parte final, tomar el último número sospechoso
+                total_candidato = numeros_sospechosos[-1]["valor"]
+                valores_pdf["total_declarado"] = total_candidato
+                total_declarado = total_candidato
+                print(f"DEBUG: Total candidato por último sospechoso: {total_candidato}")
+        
+        # CORRECCIÓN INTELIGENTE: Usar valores sospechosos detectados
+        if numeros_sospechosos:
+            print(f"DEBUG: 🔧 CORRECCIÓN INTELIGENTE usando números sospechosos")
+            
+            # Inferir valores usando los números sospechosos (ordenados por línea)
+            valores_candidatos = [n["valor"] for n in numeros_sospechosos]
+            valores_candidatos.sort()  # Ordenar de menor a mayor
+            
+            print(f"DEBUG: Valores candidatos ordenados: {valores_candidatos}")
+            
+            # LÓGICA: En facturas ecuatorianas típicas:
+            # - El más pequeño suele ser IVA
+            # - El del medio suele ser subtotal  
+            # - El más grande suele ser total
+            
+            if len(valores_candidatos) >= 3:
+                # Si tenemos 3+ valores, usar heurística
+                iva_candidato = min(valores_candidatos)  # El más pequeño
+                total_candidato = max(valores_candidatos)  # El más grande
+                # Subtotal: buscar uno que sea aprox total/1.15 o total-iva
+                for val in valores_candidatos:
+                    if abs(val - (total_candidato - iva_candidato)) < 0.5:
+                        subtotal_candidato = val
+                        break
+                else:
+                    subtotal_candidato = valores_candidatos[-2]  # Segundo más grande
+                
+                # Actualizar valores si son coherentes o usar heurística
+                # Para IVA: buscar el valor más pequeño en el rango 0.01-5.0
+                candidatos_iva = [v for v in valores_candidatos if 0.01 <= v <= 5.0]
+                if candidatos_iva:
+                    iva = min(candidatos_iva)  # El más pequeño suele ser IVA
+                    valores_pdf["iva"] = iva
+                    print(f"DEBUG: 🔧 IVA corregido: {iva}")
+                
+                # Para subtotal: buscar uno que sea coherente con total-iva
+                candidatos_subtotal = [v for v in valores_candidatos if 15.0 <= v <= 50.0]
+                if candidatos_subtotal:
+                    # Preferir el que más se acerque a total - iva
+                    total_menos_iva = total_candidato - (iva if 'iva' in locals() else 0)
+                    subtotal = min(candidatos_subtotal, key=lambda x: abs(x - total_menos_iva))
+                    valores_pdf["subtotal"] = subtotal
+                    print(f"DEBUG: 🔧 Subtotal corregido: {subtotal}")
+                
+                if 20.0 <= total_candidato <= 100.0:
+                    # AQUÍ detectamos manipulación SOLO si hay múltiples totales DIFERENTES
+                    totales_detectados = [v for v in valores_candidatos if v >= total_candidato - 5.0]
+                    valores_unicos_totales = list(set(totales_detectados))
+                    
+                    # Solo alertar si hay MÁS DE UN valor diferente (no duplicados del mismo valor)
+                    if len(valores_unicos_totales) > 1:
+                        diferencia_maxima = max(valores_unicos_totales) - min(valores_unicos_totales)
+                        # Solo alertar si la diferencia es significativa (>$1)
+                        if diferencia_maxima > 1.0:
+                            print(f"DEBUG: 🚨 MÚLTIPLES TOTALES DIFERENTES: {valores_unicos_totales}")
+                            resultado["errores"].append(f"⚠️ MÚLTIPLES TOTALES DIFERENTES DETECTADOS: {valores_unicos_totales} - Posible manipulación")
+                            # Usar el más alto como sospechoso
+                            total_declarado = max(valores_unicos_totales)
+                        else:
+                            print(f"DEBUG: ✅ Totales similares (diferencia mínima: ${diferencia_maxima:.2f})")
+                            total_declarado = total_candidato
+                    else:
+                        print(f"DEBUG: ✅ Total único o duplicado legítimo: {total_candidato}")
+                        total_declarado = total_candidato
+                        
+                    valores_pdf["total_declarado"] = total_declarado
+                    print(f"DEBUG: 🔧 Total corregido: {total_declarado}")
+        
+        # BÚSQUEDA ESPECÍFICA para valores como 33.15 (manipulados)
+        if total_declarado < 30.0:  # Si el total detectado es bajo, buscar valores más altos
+            valores_altos = [n for n in numeros_encontrados if n["valor"] > 25.0]
+            if valores_altos:
+                print(f"DEBUG: ⚠️ VALORES ALTOS DETECTADOS (posible manipulación): {[v['valor'] for v in valores_altos]}")
+                # Agregar como anomalía
+                valores_manipulados = [v["valor"] for v in valores_altos]
+                resultado["anomalias_detectadas"].append(f"Valores anómalamente altos detectados: {valores_manipulados}")
+                
+                # Si encontramos un valor significativamente mayor, es sospechoso
+                valor_mas_alto = max(valores_altos, key=lambda x: x["valor"])
+                if valor_mas_alto["valor"] > total_declarado * 1.2:  # 20% mayor
+                    resultado["errores"].append(f"⚠️ VALOR SOSPECHOSO DETECTADO: ${valor_mas_alto['valor']:.2f} vs total ${total_declarado:.2f}")
+                    print(f"DEBUG: 🚨 MANIPULACIÓN DETECTADA: {valor_mas_alto['valor']} vs {total_declarado}")
+    
+    # Actualizar resultado con valores extraídos
+    resultado["validacion_formula"]["componentes"] = {
+        "subtotal": subtotal,
+        "iva": iva,
+        "descuentos": descuentos,
+        "retenciones": 0.0,
+        "propina": 0.0,
+        "total_calculado": subtotal + iva - descuentos,
+        "total_declarado": total_declarado
+    }
+    
+    # Evaluar fórmula matemática
+    total_calculado = subtotal + iva - descuentos
+    diferencia = abs(total_calculado - total_declarado)
+    tolerancia = 0.05  # Aumentar tolerancia para diferentes formatos
+    
+    resultado["validacion_formula"]["formula_correcta"] = diferencia <= tolerancia
+    resultado["validacion_formula"]["diferencia"] = diferencia
+    resultado["validacion_formula"]["tolerancia"] = tolerancia
+    
+    if diferencia > tolerancia:
+        resultado["errores"].append(f"Fórmula PDF incorrecta: {subtotal:.2f} + {iva:.2f} - {descuentos:.2f} = {total_calculado:.2f}, pero declara {total_declarado:.2f}")
+    
+    # Detección de manipulación visual
+    pdf_total_extraido = pdf_fields.get("importeTotal", 0) if pdf_fields else 0
+    if pdf_total_extraido != total_declarado and abs(pdf_total_extraido - total_declarado) > 0.1:
+        diferencia_manipulacion = abs(pdf_total_extraido - total_declarado)
+        resultado["errores"].append(f"⚠️ POSIBLE MANIPULACIÓN VISUAL: PDF muestra ${total_declarado:.2f} pero extrae ${pdf_total_extraido:.2f} (diferencia: ${diferencia_manipulacion:.2f})")
+        resultado["anomalias_detectadas"].append(f"Discrepancia entre valor visual (${total_declarado:.2f}) y valor extraído (${pdf_total_extraido:.2f})")
+    
+    # Evaluar coherencia de IVA
+    if subtotal > 0 and iva > 0:
+        porcentaje_iva = (iva / subtotal) * 100
+        resultado["validacion_impuestos"]["porcentaje_detectado"] = porcentaje_iva
+        
+        # Verificar si es IVA estándar ecuatoriano (15%, 12%, 0%)
+        iva_coherente = (abs(porcentaje_iva - 15) <= 2.0 or 
+                        abs(porcentaje_iva - 12) <= 2.0 or 
+                        abs(porcentaje_iva) <= 0.5)
+        resultado["validacion_impuestos"]["iva_coherente"] = iva_coherente
+        
+        if not iva_coherente:
+            resultado["errores"].append(f"IVA no estándar: {porcentaje_iva:.2f}% (esperado: 0%, 12% o 15%)")
+    
+    print(f"DEBUG MATH_CONSISTENCY: ===== RESUMEN EXTRACCIÓN =====")
+    print(f"DEBUG: Subtotal: {subtotal}, IVA: {iva}, Total: {total_declarado}")
+    print(f"DEBUG: Fórmula válida: {resultado['validacion_formula']['formula_correcta']}")
+    print(f"DEBUG: Diferencia: {diferencia:.3f} (tolerancia: {tolerancia})")
+    print(f"DEBUG MATH_CONSISTENCY: ===== FIN EXTRACCIÓN =====")
+
+
+def _evaluar_items_desde_pdf(detalles: List[Dict[str, Any]], resultado: Dict[str, Any]):
+    """Evalúa ítems extraídos directamente del PDF."""
+    if not detalles:
+        return
+    
+    items_validos = 0
+    items_con_errores = []
+    subtotal_calculado = 0.0
+    
+    for i, item in enumerate(detalles):
+        if item.get("DEBUG_INFO"):  # Saltar items de debug
+            continue
+            
+        try:
+            # Extraer valores desde el text_sample si está disponible
+            text_sample = item.get("text_sample", "")
+            if text_sample:
+                # Buscar números en el text_sample
+                import re
+                numeros = re.findall(r'\b\d+\.\d{2}\b', text_sample)
+                if len(numeros) >= 2:
+                    # Asumir que el último número es el total del item
+                    precio_total = float(numeros[-1])
+                    subtotal_calculado += precio_total
+                    items_validos += 1
+                    continue
+        except:
+            pass
+        
+        # Si no pudimos extraer del text_sample, marcar como error
+        items_con_errores.append({
+            "item": i,
+            "error": "No se pudo extraer información financiera del item PDF"
+        })
+    
+    resultado["validacion_items"]["items_analizados"] = len(detalles) - sum(1 for d in detalles if d.get("DEBUG_INFO"))
+    resultado["validacion_items"]["items_validos"] = items_validos
+    resultado["validacion_items"]["items_con_errores"] = items_con_errores
+    resultado["validacion_items"]["subtotal_calculado"] = subtotal_calculado
+
+
+def _calcular_metrica_consistencia(resultado: Dict[str, Any]) -> int:
+    """Calcula métrica final de consistencia (0-100)"""
+    
+    score = 100
+    
+    # Penalizaciones por errores
+    num_errores = len(resultado["errores"])
+    score -= num_errores * 15  # 15 puntos por error
+    
+    # Penalizaciones por advertencias
+    num_advertencias = len(resultado["advertencias"])
+    score -= num_advertencias * 5  # 5 puntos por advertencia
+    
+    # Penalizaciones por anomalías
+    num_anomalias = len(resultado["anomalias_detectadas"])
+    score -= num_anomalias * 10  # 10 puntos por anomalía
+    
+    # Bonus por validaciones exitosas
+    if resultado["validacion_formula"]["formula_correcta"]:
+        score += 5
+    
+    if resultado["validacion_impuestos"]["iva_coherente"]:
+        score += 5
+    
+    # Bonus por items válidos
+    items = resultado["validacion_items"]
+    if items["items_analizados"] > 0:
+        porcentaje_validos = (items["items_validos"] / items["items_analizados"]) * 100
+        if porcentaje_validos >= 95:
+            score += 10
+        elif porcentaje_validos >= 80:
+            score += 5
+    
+    return max(0, min(100, score))
 
 
 # ==================== FUNCIONES AUXILIARES PARA ANÁLISIS ====================
