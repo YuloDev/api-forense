@@ -22,7 +22,12 @@ from config import (
 )
 from utils import log_step, normalize_comprobante_xml, strip_accents, _to_float
 from pdf_extract import extract_clave_acceso_from_text, extract_invoice_fields_from_text
-from ocr import easyocr_text_from_pdf, HAS_EASYOCR
+# OCR functionality stubs (archivo ocr.py fue eliminado)
+def easyocr_text_from_pdf(*args, **kwargs):
+    """Stub function - OCR functionality disabled"""
+    return ""
+
+HAS_EASYOCR = False
 from sri import sri_autorizacion_por_clave, parse_autorizacion_response, factura_xml_to_json
 from riesgo import evaluar_riesgo_factura, detectar_texto_sobrepuesto_avanzado
 

@@ -12,7 +12,12 @@ from pdfminer.high_level import extract_text
 from config import MAX_PDF_BYTES
 from utils import log_step
 from pdf_extract import extract_clave_acceso_from_text, extract_invoice_fields_from_text
-from ocr import easyocr_text_from_pdf, HAS_EASYOCR
+# OCR functionality stubs (archivo ocr.py fue eliminado)
+def easyocr_text_from_pdf(*args, **kwargs):
+    """Stub function - OCR functionality disabled"""
+    return ""
+
+HAS_EASYOCR = False
 from riesgo import evaluar_riesgo
 
 router = APIRouter()
