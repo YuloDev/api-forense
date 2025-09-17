@@ -2,7 +2,8 @@
   "fecha_creacion_vs_emision": 16,
   "fecha_mod_vs_creacion": 12,
   "software_conocido": 12,
-  "capas_multiples": 40,
+  "num_paginas": 10,
+  "capas_multiples": 5,
   "consistencia_fuentes": 8,
   "dpi_uniforme": 8,
   "compresion_estandar": 6,
@@ -12,5 +13,8 @@
   "archivos_incrustados": 3,
   "firmas_pdf": -4,
   "actualizaciones_incrementales": 3,
+  "cifrado_permisos_extra": 2,
+  "math_consistency": 10,
+  "validacion_financiera": 15,
   "sri_verificacion": 20
 }

@@ -24,7 +24,7 @@ from utils import log_step, normalize_comprobante_xml, strip_accents, _to_float
 from pdf_extract import extract_clave_acceso_from_text, extract_invoice_fields_from_text
 from ocr import easyocr_text_from_pdf, HAS_EASYOCR
 from sri import sri_autorizacion_por_clave, parse_autorizacion_response, factura_xml_to_json
-from riesgo import evaluar_riesgo_factura
+from riesgo import evaluar_riesgo_factura, detectar_texto_sobrepuesto_avanzado
 
 import fitz  # para chequeo de PDF escaneado
 
@@ -300,10 +300,30 @@ async def validar_factura(req: Peticion):
     print(f"[DEBUG COINCIDENCIA] total_pdf_items: {total_pdf_items}")
     print(f"[DEBUG COINCIDENCIA] total_sri_items: {total_sri_items}")
     
+    # 7) Análisis avanzado de texto sobrepuesto
+    t0 = time.perf_counter()
+    texto_sobrepuesto_analisis = detectar_texto_sobrepuesto_avanzado(pdf_bytes)
+    log_step("7) Análisis texto sobrepuesto avanzado", t0)
+    
     # Para la evaluación de riesgo, si el SRI está AUTORIZADO, eso debería ser suficiente
     # para considerarlo válido, independientemente de diferencias menores en el parseo
     sri_autorizado_ok = True  # Sabemos que llegamos aquí solo si está AUTORIZADO
-    riesgo = evaluar_riesgo_factura(pdf_bytes, fuente_texto or "", pdf_fields, sri_ok=sri_autorizado_ok)
+    
+    # Usar el XML del SRI para validación financiera mejorada
+    xml_sri_data = None
+    if sri_json:
+        xml_sri_data = sri_json.copy()
+        xml_sri_data["autorizado"] = True
+    
+    riesgo = evaluar_riesgo_factura(
+        pdf_bytes, 
+        fuente_texto or "", 
+        pdf_fields, 
+        sri_ok=sri_autorizado_ok,
+        clave_acceso=clave,
+        ejecutar_prueba_sri=False,  # Ya tenemos los datos
+        xml_sri_data=xml_sri_data   # Pasar el XML del SRI
+    )
 
     return JSONResponse(
         status_code=200,
