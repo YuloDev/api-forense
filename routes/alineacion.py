@@ -124,10 +124,5 @@ def detectar_texto_sobrepuesto_endpoint(pdf_request: PDFRequest):
         "alertas": resultado.get("alertas", []),
         "penalizacion": resultado.get("penalizacion"),
         "texto_sobrepuesto_detectado": resultado["texto_sobrepuesto_detectado"]
-        "check": "Alineación de elementos de texto",
-        "detalle": resultado.get("detalle", {}),
-        "alertas": resultado.get("alertas", []),
-        "penalizacion": resultado.get("penalizacion"),
-        "texto_sobrepuesto_detectado": resultado["texto_sobrepuesto_detectado"]
     }
  
