@@ -24,6 +24,8 @@ python-bidi==0.6.6
 # Imagen hashing
 imagehash==4.3.1     # <--- 🚨 agregado
 
+exifread==3.0.0     # <--- 🚨 agregado
+
 # SRI SOAP client
 zeep==4.3.1
 requests==2.32.5
