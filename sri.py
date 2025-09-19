@@ -242,13 +242,17 @@ def factura_xml_to_json(xml_str: str) -> Dict[str, Any]:
 def sri_autorizacion_por_clave(clave: str, timeout: float = SRI_TIMEOUT):
     """
     Consulta la autorización del comprobante en el SRI por clave de acceso.
-    Nota: aquí NO forzamos el módulo 11 (lo puedes hacer antes), pero podrías
-    lanzar ValueError si lo deseas.
+    Devuelve: (autorizado: bool, estado: str, xml_comprobante: Optional[str], raw_normalizado: dict)
     """
-    session = requests.Session()
-    transport = Transport(session=session, timeout=timeout)
-    client = Client(wsdl=SRI_WSDL, transport=transport)
-    return client.service.autorizacionComprobante(clave)
+    try:
+        session = requests.Session()
+        transport = Transport(session=session, timeout=timeout)
+        client = Client(wsdl=SRI_WSDL, transport=transport)
+        resp = client.service.autorizacionComprobante(clave)
+        return parse_autorizacion_response(resp)
+    except Exception as e:
+        print(f"[DEBUG SRI] Error en sri_autorizacion_por_clave: {e}")
+        return False, f"ERROR_SRI: {str(e)}", None, {"error": str(e)}
 
 def _serialize_zeep(obj) -> Dict[str, Any]:
     """Convierte objetos zeep a dict, con fallback."""

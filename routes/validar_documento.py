@@ -12,12 +12,59 @@ from pdfminer.high_level import extract_text
 from config import MAX_PDF_BYTES
 from utils import log_step
 from pdf_extract import extract_clave_acceso_from_text, extract_invoice_fields_from_text
-# OCR functionality stubs (archivo ocr.py fue eliminado)
-def easyocr_text_from_pdf(*args, **kwargs):
-    """Stub function - OCR functionality disabled"""
-    return ""
+from helpers.type_conversion import safe_serialize_dict
+# OCR functionality básica restaurada
+def easyocr_text_from_pdf(pdf_bytes, lang=['es', 'en']):
+    """
+    Implementación básica de OCR usando PyMuPDF + pytesseract como fallback
+    """
+    try:
+        import fitz
+        import re
+        
+        # Primero intentar extracción de texto normal
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        text_extracted = ""
+        
+        for page_num in range(doc.page_count):
+            page = doc.load_page(page_num)
+            page_text = page.get_text()
+            
+            # Si la página tiene poco texto, intentar OCR de imágenes
+            if len(page_text.strip()) < 50:
+                try:
+                    # Convertir página a imagen
+                    pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))  # Aumentar resolución
+                    img_data = pix.tobytes("png")
+                    
+                    # Intentar OCR con pytesseract si está disponible
+                    try:
+                        import pytesseract
+                        from PIL import Image
+                        import io
+                        
+                        img = Image.open(io.BytesIO(img_data))
+                        ocr_text = pytesseract.image_to_string(img, lang='spa+eng')
+                        text_extracted += f"\n--- OCR Página {page_num + 1} ---\n{ocr_text}\n"
+                        
+                    except ImportError:
+                        # Si no hay pytesseract, usar extracción básica
+                        text_extracted += f"\n--- Página {page_num + 1} (básico) ---\n{page_text}\n"
+                        
+                except Exception as e:
+                    # Fallback a texto normal
+                    text_extracted += f"\n--- Página {page_num + 1} ---\n{page_text}\n"
+            else:
+                text_extracted += f"\n--- Página {page_num + 1} ---\n{page_text}\n"
+        
+        doc.close()
+        return text_extracted
+        
+    except Exception as e:
+        print(f"Error en OCR básico: {e}")
+        return ""
 
-HAS_EASYOCR = False
+HAS_EASYOCR = True  # Habilitado con implementación básica
 from riesgo import evaluar_riesgo
 
 router = APIRouter()
@@ -76,11 +123,11 @@ async def validar_documento(req: PeticionDoc):
 
     return JSONResponse(
         status_code=200,
-        content={
+        content=safe_serialize_dict({
             "sri_verificado": False,
             "mensaje": "Análisis local del documento (sin consulta al SRI).",
             "riesgo": riesgo,
             "claveAccesoDetectada": clave,
             "textoAnalizado": fuente_texto
-        }
+        })
     )

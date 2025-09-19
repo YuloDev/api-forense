@@ -205,33 +205,89 @@ def parse_fragmented_items(lines: List[str]) -> List[Dict[str, Any]]:
     return items
 
 def extract_items_from_text(raw_text: str) -> List[Dict[str, Any]]:
+    """
+    Función mejorada para extraer items de facturas desde texto (compatible con OCR)
+    """
     items: List[Dict[str, Any]] = []
     if not raw_text:
         return items
 
     text = strip_accents(raw_text)
+    
+    # NUEVO: Detectar si es texto OCR (tiene marcas de OCR)
+    is_ocr_text = "--- OCR Página" in raw_text or "--- Página" in raw_text
+    
+    if is_ocr_text:
+        print("DEBUG: Detectado texto OCR - usando parser mejorado")
+        items.extend(extract_items_from_ocr_text(text))
+    else:
+        # Parser tradicional para texto PDF normal
+        items.extend(extract_items_traditional(text))
+    
+    # Si no se encontraron items, intentar parser fragmentado como fallback
+    if not items:
+        print("DEBUG: No se encontraron items - intentando parser fragmentado")
+        lines = [l.strip() for l in text.splitlines() if l.strip()]
+        items.extend(parse_fragmented_items(lines))
+    
+    # FALLBACK ESPECÍFICO: Si detectamos el patrón de factura fragmentada
+    text_upper = text.upper()
+    if ("CEPILLOS" in text_upper and "REPELENTE" in text_upper and 
+        "6.8288" in text and "6.3460" in text):
+        lines = [l.strip() for l in text.splitlines() if l.strip()]
+        fragmented_items = parse_fragmented_items(lines)
+        if fragmented_items:
+            items.extend(fragmented_items)
+
+    # Eliminar duplicados
+    uniq = []
+    seen = set()
+    for it in items:
+        key = (norm_desc(it["descripcion"]), round(it["cantidad"], 4),
+               round(it["precioUnitario"], 4), round(it["precioTotal"], 4))
+        if key not in seen:
+            seen.add(key)
+            uniq.append(it)
+    
+    # Debug temporal: si no hay items válidos, agregar info de debug
+    if not uniq and len(text.splitlines()) > 0:
+        lines = [l.strip() for l in text.splitlines() if l.strip()]
+        debug_lines = lines[:20] if len(lines) > 0 else ["No hay líneas"]
+        uniq.append({
+            "DEBUG_INFO": True,
+            "total_lines": len(lines),
+            "first_20_lines": debug_lines,
+            "text_sample": text[:500] if text else "No text",
+            "is_ocr_detected": is_ocr_text
+        })
+    
+    return uniq
+
+
+def extract_items_traditional(text: str) -> List[Dict[str, Any]]:
+    """Parser tradicional para texto PDF normal"""
+    items = []
+    
     start_idx = re.search(r"\bDESCRIPCION\b", text, re.I)
     if start_idx:
         text = text[start_idx.start():]
 
     lines = [l.strip() for l in text.splitlines() if l.strip()]
+    
+    # Patrones originales
     patt1 = re.compile(
         r"^(?P<desc>.+?)\s+(?P<cant>\d+(?:[.,]\d+)?)\s+(?P<unit>\d+(?:[.,]\d+)?)\s+(?P<tot>\d+(?:[.,]\d+)?)$"
     )
     patt2 = re.compile(
         r"^(?P<desc>.+?)\s+(?P<cant>\d+(?:[.,]\d+)?)\s+.*?(?P<unit>\d+(?:[.,]\d+)?)\s+(?P<tot>\d+(?:[.,]\d+)?)$"
     )
-    # Patron para formato: codigo cantidad descripcion precio_unitario descuento precio_total
     patt3 = re.compile(
         r"^\s*\d+\s+(?P<cant>\d+(?:[.,]\d+)?)\s+(?P<desc>.+?)\s+(?P<unit>\d+(?:[.,]\d+)?)\s+(?P<desc_val>\d+(?:[.,]\d+)?)\s+(?P<tot>\d+(?:[.,]\d+)?)$"
     )
-    # Patron alternativo mas flexible
     patt4 = re.compile(
         r"^\s*(?:\d+\s+)?(?P<cant>\d+(?:[.,]\d+)?)\s+(?P<desc>.{10,}?)\s+(?P<unit>\d+(?:[.,]\d+)?)\s+\d+(?:[.,]\d+)?\s+(?P<tot>\d+(?:[.,]\d+)?)$"
     )
 
-    # Intentar parser tradicional primero
-    traditional_items_found = False
     for ln in lines:
         if re.search(r"(DESCRIPCION|CANTIDAD|PRE\.?U|UNI|PRE\.?TOT|TOTAL|SUBTOTAL|IVA|TARIFA)", ln, re.I):
             continue
@@ -248,47 +304,129 @@ def extract_items_from_text(raw_text: str) -> List[Dict[str, Any]]:
                     "precioUnitario": unit,
                     "precioTotal": tot,
                 })
-                traditional_items_found = True
     
-    # Si no encuentra items con parser tradicional, usar parser fragmentado
-    if not traditional_items_found:
-        items.extend(parse_fragmented_items(lines))
-    
-    # FALLBACK: Si traditional encontró algo pero después del filtrado no hay nada válido,
-    # intentar con parser fragmentado
-    if traditional_items_found and len(items) == 0:
-        items.extend(parse_fragmented_items(lines))
-    
-    # FALLBACK ESPECÍFICO: Si detectamos el patrón de factura fragmentada (CEPILLOS, REPELENTE),
-    # forzar parser fragmentado
-    text_upper = text.upper()
-    if ("CEPILLOS" in text_upper and "REPELENTE" in text_upper and 
-        "6.8288" in text and "6.3460" in text):
-        fragmented_items = parse_fragmented_items(lines)
-        if fragmented_items:
-            items.extend(fragmented_items)
+    return items
 
-    # Eliminar duplicados
-    uniq = []
-    seen = set()
-    for it in items:
-        key = (norm_desc(it["descripcion"]), round(it["cantidad"], 4),
-               round(it["precioUnitario"], 4), round(it["precioTotal"], 4))
-        if key not in seen:
-            seen.add(key)
-            uniq.append(it)
+
+def extract_items_from_ocr_text(text: str) -> List[Dict[str, Any]]:
+    """
+    Parser especializado para texto extraído por OCR
+    Maneja mejor las imperfecciones y fragmentación del OCR
+    """
+    items = []
+    lines = [l.strip() for l in text.splitlines() if l.strip()]
     
-    # Debug temporal: si no hay items válidos, agregar info de debug
-    if not uniq and len(lines) > 0:
-        debug_lines = lines[:20] if len(lines) > 0 else ["No hay líneas"]
-        uniq.append({
-            "DEBUG_INFO": True,
-            "total_lines": len(lines),
-            "first_20_lines": debug_lines,
-            "text_sample": text[:500] if text else "No text"
-        })
+    print(f"DEBUG OCR: Procesando {len(lines)} líneas")
     
-    return uniq
+    # Buscar la tabla de items en el texto OCR
+    table_start = -1
+    table_end = len(lines)
+    
+    # Encontrar el inicio de la tabla de items
+    for i, line in enumerate(lines):
+        if re.search(r"(DESCRIPCION|DESCRIPTION|DETALLE|CONCEPTO|PRODUCTO)", line, re.I):
+            table_start = i + 1
+            print(f"DEBUG OCR: Tabla encontrada en línea {i}: {line}")
+            break
+    
+    # Encontrar el final de la tabla (antes de totales)
+    for i in range(table_start, len(lines)):
+        if re.search(r"(SUBTOTAL|TOTAL|IVA|DESCUENTO|VALOR\s*TOTAL)", lines[i], re.I):
+            table_end = i
+            print(f"DEBUG OCR: Fin de tabla en línea {i}: {lines[i]}")
+            break
+    
+    if table_start == -1:
+        print("DEBUG OCR: No se encontró encabezado de tabla")
+        return items
+    
+    # Procesar líneas de la tabla
+    potential_items = lines[table_start:table_end]
+    print(f"DEBUG OCR: Procesando {len(potential_items)} líneas de items potenciales")
+    
+    for i, line in enumerate(potential_items):
+        print(f"DEBUG OCR: Línea {i}: {line}")
+        
+        # Saltar líneas vacías o muy cortas
+        if len(line.strip()) < 5:
+            continue
+        
+        # Saltar líneas que son claramente encabezados o separadores
+        if re.search(r"^[-=\s]+$", line) or re.search(r"(CANTIDAD|PRECIO|TOTAL|UNIDAD)", line, re.I):
+            continue
+        
+        # Extraer números de la línea
+        numbers = re.findall(r'\b\d+[.,]\d{1,4}\b', line)
+        whole_numbers = re.findall(r'\b\d+\b', line)
+        
+        print(f"DEBUG OCR: Números decimales: {numbers}, Enteros: {whole_numbers}")
+        
+        if len(numbers) >= 2:  # Al menos precio unitario y total
+            try:
+                # Extraer descripción (texto antes de los números)
+                desc_match = re.match(r'^(.*?)\s*\d', line)
+                descripcion = desc_match.group(1).strip() if desc_match else line.split()[0]
+                
+                # Limpiar descripción
+                descripcion = re.sub(r'[^\w\s]', ' ', descripcion).strip()
+                if len(descripcion) < 3:
+                    descripcion = f"Producto {i+1}"
+                
+                # Intentar extraer cantidad (puede ser entero o decimal)
+                cantidad = 1.0  # Default
+                if whole_numbers:
+                    # Buscar cantidad (generalmente un número pequeño)
+                    for num in whole_numbers:
+                        if 1 <= int(num) <= 100:
+                            cantidad = float(num)
+                            break
+                elif numbers and len(numbers) >= 3:
+                    # Si hay 3+ números decimales, el primero podría ser cantidad
+                    try:
+                        first_num = float(numbers[0].replace(',', '.'))
+                        if 0.1 <= first_num <= 100:
+                            cantidad = first_num
+                    except:
+                        pass
+                
+                # Extraer precios (últimos números decimales)
+                if len(numbers) >= 2:
+                    precio_total = float(numbers[-1].replace(',', '.'))
+                    precio_unitario = float(numbers[-2].replace(',', '.'))
+                    
+                    # Validar que los precios sean razonables
+                    if precio_unitario <= 0 or precio_total <= 0:
+                        continue
+                    
+                    # Verificar coherencia matemática básica
+                    calculated_total = cantidad * precio_unitario
+                    if abs(calculated_total - precio_total) > precio_total * 0.1:  # 10% tolerancia
+                        # Si no coincide, tal vez el orden es diferente
+                        if len(numbers) >= 3:
+                            precio_unitario = float(numbers[-3].replace(',', '.'))
+                            calculated_total = cantidad * precio_unitario
+                    
+                    # Solo agregar si pasa las validaciones básicas
+                    if (precio_unitario > 0 and precio_total > 0 and 
+                        precio_unitario <= 1000 and precio_total <= 10000):
+                        
+                        items.append({
+                            "descripcion": descripcion,
+                            "cantidad": cantidad,
+                            "precioUnitario": round(precio_unitario, 2),
+                            "precioTotal": round(precio_total, 2),
+                            "origen": "OCR",
+                            "linea_original": line
+                        })
+                        
+                        print(f"DEBUG OCR: Item extraído - {descripcion}: {cantidad} x ${precio_unitario} = ${precio_total}")
+                
+            except Exception as e:
+                print(f"DEBUG OCR: Error procesando línea '{line}': {e}")
+                continue
+    
+    print(f"DEBUG OCR: {len(items)} items extraídos exitosamente")
+    return items
 
 def extract_invoice_fields_from_text(raw_text: str, clave_acceso: Optional[str]) -> Dict[str, Any]:
     data: Dict[str, Any] = {}

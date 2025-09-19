@@ -19,6 +19,7 @@ from typing import Dict, Any, List, Tuple, Optional
 from collections import Counter, defaultdict
 from difflib import SequenceMatcher
 import fitz
+from .type_conversion import ensure_python_bool, ensure_python_float, safe_serialize_dict
 
 # Configuración de patrones y constantes
 class LayerPatterns:
@@ -460,8 +461,8 @@ class OverlayAnalyzer:
         consistency = 0.5 * alpha_density + 0.5 * min(1.0, overlays_norm * 1.5)
         confidence = max(0.35, min(0.95, 0.40 + 0.18*strong + 0.25*consistency))
 
-        # Señal binaria “has_overlays” más robusta que un simple >3
-        has_overlays = (overlay_count > 3) or bool(alpha_lt_1) or (bm_ratio >= 0.2)
+        # Señal binaria "has_overlays" más robusta que un simple >3
+        has_overlays = ensure_python_bool((overlay_count > 3) or bool(alpha_lt_1) or (bm_ratio >= 0.2))
 
         result.update({
             "has_overlays": has_overlays,
@@ -1003,7 +1004,7 @@ def detect_layers_advanced(pdf_bytes: bytes, extracted_text: str = "") -> Dict[s
         Dict con análisis completo de capas múltiples
     """
     detector = LayerDetector(pdf_bytes, extracted_text)
-    return detector.analyze()
+    return safe_serialize_dict(detector.analyze())
 
 
 def calculate_dynamic_penalty(probability_percentage: float, base_weight: int = 15) -> int:

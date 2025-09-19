@@ -23,6 +23,7 @@ from sri import (
     factura_xml_to_json,
     validar_clave_acceso_interna,
 )
+from helpers.type_conversion import safe_serialize_dict, ensure_python_bool
 
 from config import (
     TEXT_MIN_LEN_FOR_DOC,
@@ -321,6 +322,74 @@ def _detect_layers(pdf_bytes: bytes) -> bool:
 
 
 # ================= FUNCIONES DE CONVENIENCIA PARA EL NUEVO SISTEMA =================
+
+def _generate_capas_check_from_complete_response(capas_analisis_completo: Dict[str, Any]) -> Dict[str, Any]:
+    """Genera el check de capas múltiples usando toda la respuesta completa del endpoint universal"""
+    
+    # Obtener análisis de capas del resultado completo
+    analisis_por_capas = capas_analisis_completo.get("analisis_por_capas", {})
+    resumen_general = capas_analisis_completo.get("resumen_general", {})
+    
+    # Calcular probabilidad y nivel de riesgo (usar el más alto entre todos los análisis)
+    probabilidad = analisis_por_capas.get("probabilidad_overlay", 0.0)
+    
+    # Obtener niveles de riesgo de todos los análisis
+    nivel_capas = analisis_por_capas.get("nivel_riesgo", "LOW")
+    nivel_avanzado = capas_analisis_completo.get("analisis_avanzado_overlay", {}).get("nivel_riesgo", "LOW")
+    nivel_imagenes = capas_analisis_completo.get("analisis_imagenes", {}).get("nivel_riesgo_imagenes", "LOW")
+    
+    # Usar el nivel de riesgo más alto
+    niveles = [nivel_capas, nivel_avanzado, nivel_imagenes]
+    if "HIGH" in niveles:
+        nivel_riesgo = "HIGH"
+    elif "MEDIUM" in niveles:
+        nivel_riesgo = "MEDIUM"
+    else:
+        nivel_riesgo = "LOW"
+    
+    # Calcular penalización dinámica según nivel de riesgo
+    peso_base = RISK_WEIGHTS.get("capas_multiples", 5)  # Valor base de capas_multiples
+    if nivel_riesgo == "HIGH":
+        penalizacion = peso_base  # Penalización completa
+    elif nivel_riesgo == "MEDIUM":
+        penalizacion = peso_base // 2  # Mitad de la penalización
+    else:  # LOW
+        penalizacion = 0  # Sin penalización
+    
+    # Generar explicación de penalización
+    penalty_explanation = f"Penalización dinámica calculada: {penalizacion} puntos para {probabilidad*100:.1f}% de probabilidad (nivel: {nivel_riesgo})"
+    
+    # Generar resumen con la estructura exacta solicitada usando datos del resumen_general
+    resumen = {
+        "probabilidad_manipulacion": resumen_general.get("probabilidad_manipulacion", probabilidad),
+        "nivel_riesgo": resumen_general.get("nivel_riesgo", nivel_riesgo),
+        "total_zones_analyzed": resumen_general.get("total_zones_analyzed", 8),
+        "zones_with_overlay": resumen_general.get("zones_with_overlay", 0),
+        "overlay_probability": resumen_general.get("overlay_probability", probabilidad),
+        "risk_level": resumen_general.get("risk_level", nivel_riesgo),
+        "recommendations": resumen_general.get("recommendations", []),
+        "analisis_avanzado": resumen_general.get("analisis_avanzado", {}),
+        "analisis_por_stream": resumen_general.get("analisis_por_stream", {}),
+        "analisis_por_capas": resumen_general.get("analisis_por_capas", {})
+    }
+    
+    # Generar detalle con las secciones específicas solicitadas
+    detalle = {
+        "analisis_imagenes": capas_analisis_completo.get("analisis_imagenes", {}),
+        "indicadores_clave": capas_analisis_completo.get("indicadores_clave", {}),
+        "analisis_avanzado_overlay": capas_analisis_completo.get("analisis_avanzado_overlay", {}),
+        "analisis_por_capas": capas_analisis_completo.get("analisis_por_capas", {})
+    }
+    
+    # Generar check de capas con resumen y detalle al mismo nivel
+    capas_check = {
+        "check": "Presencia de capas múltiples (análisis integrado)",
+        "resumen": resumen,
+        "detalle": detalle,
+        "penalizacion": penalizacion
+    }
+    
+    return capas_check
 
 def evaluar_capas_multiples_completo(pdf_bytes: bytes, extracted_text: str = "", 
                                    base_weight: int = None) -> Dict[str, Any]:
@@ -752,10 +821,58 @@ def evaluar_riesgo(pdf_bytes: bytes, fuente_texto: str, pdf_fields: Dict[str, An
     size_bytes = len(pdf_bytes)
     scanned = _is_scanned_image_pdf(pdf_bytes, fuente_texto or "")
 
-    # --- ANÁLISIS AVANZADO DE CAPAS ---
-    layers_analysis = _detect_layers_advanced(pdf_bytes, fuente_texto or "")
-    text_overlapping = _detect_text_overlapping(fuente_texto or "")
-    structure_analysis = _analyze_pdf_structure_layers(doc)
+    # --- ANÁLISIS AVANZADO DE CAPAS (usando lógica completa de detección de texto superpuesto) ---
+    from helpers.deteccion_texto_superpuesto import detectar_texto_superpuesto_detallado
+    import base64
+    
+    # Usar la lógica completa del endpoint universal de detección de texto superpuesto
+    try:
+        # Usar la función que devuelve la estructura original del endpoint
+        pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
+        capas_analisis_completo = detectar_texto_superpuesto_detallado(pdf_base64)
+        
+        # Debug: verificar si la respuesta tiene la estructura esperada
+        if not isinstance(capas_analisis_completo, dict):
+            print(f"DEBUG: capas_analisis_completo no es dict: {type(capas_analisis_completo)}")
+            capas_analisis_completo = {}
+        else:
+            print(f"DEBUG: capas_analisis_completo keys: {list(capas_analisis_completo.keys())}")
+            print(f"DEBUG: analisis_imagenes: {capas_analisis_completo.get('analisis_imagenes', 'NO_EXISTS')}")
+            print(f"DEBUG: analisis_por_capas: {capas_analisis_completo.get('analisis_por_capas', 'NO_EXISTS')}")
+    except Exception as e:
+        print(f"DEBUG: Error en análisis de capas: {str(e)}")
+        capas_analisis_completo = {}
+    
+    # Extraer información para compatibilidad con el sistema existente
+    layers_analysis = {
+        "has_layers": capas_analisis_completo.get("tiene_capas", False),
+        "confidence": capas_analisis_completo.get("probabilidad", 0.0) / 100.0,
+        "probability_percentage": capas_analisis_completo.get("probabilidad", 0.0),
+        "risk_level": "HIGH" if capas_analisis_completo.get("probabilidad", 0) > 70 else "MEDIUM" if capas_analisis_completo.get("probabilidad", 0) > 40 else "LOW",
+        "indicators": capas_analisis_completo.get("indicadores", []),
+        "ocg_objects": capas_analisis_completo.get("objetos_ocg", 0),
+        "overlay_objects": capas_analisis_completo.get("objetos_superpuestos", 0),
+        "transparency_objects": capas_analisis_completo.get("objetos_transparencia", 0),
+        "suspicious_operators": capas_analisis_completo.get("operadores_sospechosos", 0),
+        "content_streams": capas_analisis_completo.get("content_streams", 0),
+        "blend_modes": capas_analisis_completo.get("modos_mezcla", []),
+        "alpha_values": capas_analisis_completo.get("valores_alpha", []),
+        "score_breakdown": capas_analisis_completo.get("desglose_puntuacion", {}),
+        "layer_count_estimate": capas_analisis_completo.get("estimacion_capas", 0),
+        "detailed_analysis": capas_analisis_completo.get("analisis_detallado", {}),
+        "penalty_points": capas_analisis_completo.get("penalizacion", 0),
+        "weights_used": capas_analisis_completo.get("pesos_usados", {}),
+        "metodo_calculo": "deteccion_texto_superpuesto_universal"
+    }
+    
+    # Mantener compatibilidad con el sistema existente
+    text_overlapping = capas_analisis_completo.get("tiene_texto_superpuesto", False)
+    structure_analysis = {
+        "suspicious_structure": capas_analisis_completo.get("estructura_sospechosa", False),
+        "details": capas_analisis_completo.get("detalles_estructura", []),
+        "object_analysis": capas_analisis_completo.get("analisis_objetos", {}),
+        "content_analysis": capas_analisis_completo.get("analisis_contenido", {})
+    }
 
     # --- fechas ---
     fecha_emision = _parse_fecha_emision(pdf_fields.get("fechaEmision"))
@@ -798,8 +915,8 @@ def evaluar_riesgo(pdf_bytes: bytes, fuente_texto: str, pdf_fields: Dict[str, An
     align_score_mean = statistics.mean(align_score_vals) if align_score_vals else 1.0
     rot_ratio_mean = statistics.mean(rot_ratio_vals) if rot_ratio_vals else 0.0
 
-    # --- análisis avanzado de texto sobrepuesto (ejecutar una sola vez) ---
-    texto_sobrepuesto_analisis_completo = detectar_texto_sobrepuesto_avanzado(pdf_bytes)
+    # --- análisis avanzado de texto sobrepuesto (usando la misma lógica de capas) ---
+    texto_sobrepuesto_analisis_completo = capas_analisis_completo
     
     # --- análisis financiero completo ---
     # TODO: Integrar XML del SRI cuando esté disponible
@@ -867,50 +984,17 @@ def evaluar_riesgo(pdf_bytes: bytes, fuente_texto: str, pdf_fields: Dict[str, An
     score += penal
 
 
-    # 5) Presencia de capas múltiples (ANÁLISIS INTEGRADO CON SISTEMA DINÁMICO)
-    layer_details = {
-        "deteccion_avanzada": layers_analysis["has_layers"],
-        "porcentaje_probabilidad": layers_analysis["probability_percentage"],
-        "nivel_riesgo": layers_analysis["risk_level"],
-        "confianza": layers_analysis["confidence"],
-        "indicadores": layers_analysis["indicators"],
-        "objetos_ocg": layers_analysis["ocg_objects"],
-        "objetos_superpuestos": layers_analysis["overlay_objects"],
-        "objetos_transparencia": layers_analysis["transparency_objects"],
-        "operadores_sospechosos": layers_analysis["suspicious_operators"],
-        "content_streams": layers_analysis["content_streams"],
-        "modos_fusion": layers_analysis["blend_modes"],
-        "valores_alpha": layers_analysis["alpha_values"],
-        "desglose_puntuacion": layers_analysis["score_breakdown"],
-        "estimacion_capas": layers_analysis["layer_count_estimate"],
-        "analisis_detallado": layers_analysis["detailed_analysis"],
-        "metodo_calculo": "sistema_dinamico_v2"
-    }
+    # 5) Presencia de capas múltiples (USANDO RESPUESTA COMPLETA DEL ENDPOINT UNIVERSAL)
+    # Usar toda la respuesta del endpoint detectar-texto-superpuesto-simple
+    capas_check = _generate_capas_check_from_complete_response(capas_analisis_completo)
     
-    # NUEVO SISTEMA DE PESOS DINÁMICOS MEJORADO
-    # El LayerDetector ya calculó la penalización óptima usando múltiples métodos
-    if "penalty_points" in layers_analysis:
-        penal = layers_analysis["penalty_points"]
-        layer_details["peso_base_usado"] = layers_analysis.get("weights_used", {})
-        layer_details["penalty_method"] = "dynamic_calculated"
-    else:
-        # Fallback al método anterior si no está disponible
-        probability_pct = layers_analysis["probability_percentage"]
-        base_weight = RISK_WEIGHTS.get("capas_multiples", 15)  # Usar peso mejorado por defecto
-        penal = calculate_dynamic_penalty(probability_pct, base_weight)
-        layer_details["peso_base_usado"] = base_weight
-        layer_details["penalty_method"] = "fallback_calculation"
-    
-    # Agregar información adicional del cálculo
-    layer_details["penalty_calculated"] = penal
-    layer_details["penalty_explanation"] = f"Penalización dinámica calculada: {penal} puntos para {layers_analysis['probability_percentage']:.1f}% de probabilidad (nivel: {layers_analysis['risk_level']})"
-
     details_prior.append({
-        "check": "Presencia de capas múltiples (análisis integrado)", 
-        "detalle": layer_details, 
-        "penalizacion": penal
+        "check": capas_check["check"],
+        "resumen": capas_check["resumen"],
+        "detalle": capas_check["detalle"],
+        "penalizacion": capas_check["penalizacion"]
     })
-    score += penal
+    score += capas_check["penalizacion"]
 
     # SECUNDARIAS (continúan igual)
     # Consistencia de fuentes
@@ -956,17 +1040,20 @@ def evaluar_riesgo(pdf_bytes: bytes, fuente_texto: str, pdf_fields: Dict[str, An
     detalle_completo = {
         "alineacion_promedio": align_score_mean, 
         "rotacion_promedio": rot_ratio_mean,
-        "alertas": texto_sobrepuesto.get("alertas", []),
-            "texto_sobrepuesto_detectado": texto_sobrepuesto.get("texto_sobrepuesto_detectado", False),
-            "total_casos": texto_sobrepuesto.get("total_casos", 0),
-        "paginas_afectadas": texto_sobrepuesto.get("paginas_afectadas", []),
-            "metodo_usado": texto_sobrepuesto.get("metodo_usado", "desconocido"),
-            "estadisticas": texto_sobrepuesto.get("estadisticas", {})
+        "alertas": texto_sobrepuesto_analisis_completo.get("alertas", []),
+        "texto_sobrepuesto_detectado": texto_sobrepuesto_analisis_completo.get("tiene_texto_superpuesto", False),
+        "total_casos": texto_sobrepuesto_analisis_completo.get("total_casos", 0),
+        "paginas_afectadas": texto_sobrepuesto_analisis_completo.get("paginas_afectadas", []),
+        "metodo_usado": texto_sobrepuesto_analisis_completo.get("metodo_usado", "deteccion_texto_superpuesto_universal"),
+        "estadisticas": texto_sobrepuesto_analisis_completo.get("estadisticas", {}),
+        "probabilidad": texto_sobrepuesto_analisis_completo.get("probabilidad", 0.0),
+        "indicadores": texto_sobrepuesto_analisis_completo.get("indicadores", []),
+        "penalizacion": texto_sobrepuesto_analisis_completo.get("penalizacion", 0)
     }
     
     # Agregar error si existe
-    if texto_sobrepuesto.get("error"):
-        detalle_completo["error"] = texto_sobrepuesto["error"]
+    if texto_sobrepuesto_analisis_completo.get("error"):
+        detalle_completo["error"] = texto_sobrepuesto_analisis_completo["error"]
     
     details_sec.append({
         "check": "Alineación de elementos de texto",
@@ -1132,10 +1219,10 @@ def evaluar_riesgo(pdf_bytes: bytes, fuente_texto: str, pdf_fields: Dict[str, An
             nivel = k
             break
 
-    return {
+    return safe_serialize_dict({
         "score": score,
         "nivel": nivel,
-        "es_falso_probable": es_falso,
+        "es_falso_probable": ensure_python_bool(es_falso),
         "prioritarias": details_prior,
         "secundarias": details_sec,
         "adicionales": details_extra,
@@ -1143,12 +1230,7 @@ def evaluar_riesgo(pdf_bytes: bytes, fuente_texto: str, pdf_fields: Dict[str, An
         "paginas": pages,
         "escaneado_aprox": scanned,
         "imagenes": img_info,
-        "analisis_capas": {
-            "deteccion_avanzada": layers_analysis,
-            "superposicion_texto": text_overlapping,
-            "estructura_pdf": structure_analysis
-        }
-    }
+    })
 
 
 def evaluar_riesgo_factura(
@@ -1159,7 +1241,9 @@ def evaluar_riesgo_factura(
     clave_acceso: Optional[str] = None,      # si la pasas, podemos ejecutar el test SRI aquí mismo
     ejecutar_prueba_sri: bool = False,       # True => se ejecuta verificar_sri_para_riesgo(...)
     guardar_json_sri: bool = False,          # True => guarda archivo sri_response_*.json como hacía tu test
-    xml_sri_data: Optional[Dict[str, Any]] = None  # Datos XML del SRI ya parseados
+    xml_sri_data: Optional[Dict[str, Any]] = None,  # Datos XML del SRI ya parseados
+    firmas_pdf: Optional[bool] = None,       # True si tiene firmas PDF válidas, False si no, None si no se verificó
+    info_firmas: Optional[Dict[str, Any]] = None  # Información detallada de las firmas
 ) -> Dict[str, Any]:
     """
     Igual que antes, pero ahora puede ejecutar el 'test SRI' integrado si así lo pides.
@@ -1197,36 +1281,64 @@ def evaluar_riesgo_factura(
         "penalizacion": penal
     })
 
-    # 4) (Nuevo) Adjuntar resumen del test SRI si lo ejecutamos aquí
-    if sri_test_result is not None:
-        # Arma un resumen legible y compacto
-        info_trib = ((sri_test_result.get("factura_json") or {}).get("infoTributaria") or {})
-        info_fact = ((sri_test_result.get("factura_json") or {}).get("infoFactura") or {})
+    # 4) Aplicar penalización por falta de firmas PDF
+    if firmas_pdf is not None:
+        penal_firmas = 0 if firmas_pdf else RISK_WEIGHTS.get("firmas_digitales", 0)
+        base["score"] = round(max(0, min(100, base["score"] + penal_firmas)), 2)
+        
+        # Generar detalle de firmas basado en la información de detección de firmas PDF
+        if info_firmas and isinstance(info_firmas, dict):
+            # Usar información detallada de la detección de firmas PDF
+            detalle_firmas = {
+                "firma_detectada": info_firmas.get("firma_detectada", False),
+                "cantidad_firmas": info_firmas.get("metadatos", {}).get("numero_firmas", 0),
+                "firmas_validas": info_firmas.get("resumen", {}).get("firmas_validas", 0),
+                "nivel_seguridad": info_firmas.get("tipo_firma", "bajo"),
+                "documento_integro": info_firmas.get("resumen", {}).get("integridad_ok", 0) > 0,
+                "certificado_valido": info_firmas.get("resumen", {}).get("chain_ok", 0) > 0,
+                "vulnerabilidades": []
+            }
+            
+            # Agregar vulnerabilidades basadas en el estado
+            if detalle_firmas["firmas_validas"] == 0:
+                detalle_firmas["vulnerabilidades"].append("Certificado no emitido por autoridad confiable")
+            if not detalle_firmas["documento_integro"]:
+                detalle_firmas["vulnerabilidades"].append("Documento modificado después de la firma")
+            if not detalle_firmas["certificado_valido"]:
+                detalle_firmas["vulnerabilidades"].append("Certificado no válido o cadena de confianza rota")
+        else:
+            # Usar información básica basada en firmas_pdf
+            if firmas_pdf:
+                detalle_firmas = {
+                    "firma_detectada": True,
+                    "cantidad_firmas": 1,
+                    "firmas_validas": 1,
+                    "nivel_seguridad": "alto",
+                    "documento_integro": True,
+                    "certificado_valido": True,
+                    "vulnerabilidades": []
+                }
+            else:
+                detalle_firmas = {
+                    "firma_detectada": False,
+                    "cantidad_firmas": 0,
+                    "firmas_validas": 0,
+                    "nivel_seguridad": "bajo",
+                    "documento_integro": False,
+                    "certificado_valido": False,
+                    "vulnerabilidades": [
+                        "Certificado no emitido por autoridad confiable"
+                    ]
+                }
+        
+        base.setdefault("adicionales", []).append({
+            "check": "Firma(s) digital(es) PDF",
+            "detalle": detalle_firmas,
+            "penalizacion": penal_firmas
+        })
 
-        base["sri"] = {
-            "ejecutado_aqui": True,
-            "clave": sri_test_result.get("clave"),
-            "validacion_interna": sri_test_result.get("validacion_interna"),
-            "consulta_ok": sri_test_result.get("consulta_ok"),
-            "autorizado": sri_test_result.get("autorizado"),
-            "estado": sri_test_result.get("estado"),
-            # Campos clave (si hubo XML->JSON)
-            "ruc": info_trib.get("ruc"),
-            "razonSocial": info_trib.get("razonSocial"),
-            "fechaEmision": info_fact.get("fechaEmision"),
-            "importeTotal": info_fact.get("importeTotal"),
-            # Trazas
-            "raw_estados": (sri_test_result.get("raw") or {}).get("estados"),
-            "claveAccesoConsultada": (sri_test_result.get("raw") or {}).get("claveAccesoConsultada"),
-            "archivo_json": sri_test_result.get("archivo_json"),
-            "error": sri_test_result.get("error"),
-        }
-    else:
-        base["sri"] = {
-            "ejecutado_aqui": False,
-            "usado_sri_ok_externo": True,
-            "sri_ok": bool(sri_ok)
-        }
+    # 4) (Nuevo) Adjuntar resumen del test SRI si lo ejecutamos aquí
+    # Se eliminó la sección "sri" del objeto base según solicitud del usuario
 
     # 5) Recalcular nivel según score final (igual que en tu función)
     for k, (lo, hi) in RISK_LEVELS.items():
@@ -1234,7 +1346,7 @@ def evaluar_riesgo_factura(
             base["nivel"] = k
             break
 
-    return base
+    return safe_serialize_dict(base)
     """
     Igual que evaluar_riesgo, pero si el comprobante SRI no coincide,
     suma la penalización 'sri_verificacion'.
@@ -2172,13 +2284,14 @@ def detectar_capas_standalone(pdf_path: str) -> Dict[str, Any]:
         doc.close()
         
         # Generar reporte
+        text_overlapping = _detect_text_overlapping(extracted_text)
         reporte = generar_reporte_capas(layers_analysis, text_overlapping, structure_analysis)
         
         return {
             "archivo": pdf_path,
             "tiene_capas": layers_analysis["has_layers"],
             "confianza_total": layers_analysis["confidence"],
-         "estructura_sospechosa": structure_analysis["suspicious_structure"],
+            "estructura_sospechosa": structure_analysis["suspicious_structure"],
             "analisis_detallado": {
                 "capas": layers_analysis,
                 "texto": text_overlapping,

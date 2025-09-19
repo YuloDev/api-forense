@@ -13,6 +13,105 @@ import re
 import fitz
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime
+from .validacion_firma_digital import (
+    validate_pdf_signatures, 
+    detectar_firmas_pdf_simple,
+    generar_reporte_firmas
+)
+
+
+def analizar_firmas_digitales_avanzado(pdf_bytes: bytes, 
+                                     verify_crypto: bool = True,
+                                     verify_chain: bool = True) -> Dict[str, Any]:
+    """
+    Análisis avanzado de firmas digitales en un PDF usando validación criptográfica.
+    
+    Detecta y analiza:
+    - Presencia de firmas digitales
+    - Tipos de firma (básica, avanzada, cualificada)
+    - Validez de certificados
+    - Metadatos de firma (fecha, emisor, etc.)
+    - Integridad del documento
+    - Cadena de confianza
+    - Verificación criptográfica
+    
+    Args:
+        pdf_bytes: Contenido del PDF en bytes
+        verify_crypto: Si verificar la firma criptográfica
+        verify_chain: Si verificar la cadena de certificados
+        
+    Returns:
+        Dict con análisis completo de firmas digitales
+    """
+    # Usar la nueva funcionalidad de validación avanzada
+    validacion_result = validate_pdf_signatures(
+        pdf_bytes, 
+        verify_crypto=verify_crypto, 
+        verify_chain=verify_chain
+    )
+    
+    # Convertir resultado a formato compatible
+    resultado = {
+        "firma_detectada": validacion_result.get("firma_detectada", False),
+        "cantidad_firmas": validacion_result.get("resumen", {}).get("total_firmas", 0),
+        "firmas_validas": validacion_result.get("resumen", {}).get("firmas_validas", 0),
+        "firmas_invalidas": validacion_result.get("resumen", {}).get("total_firmas", 0) - 
+                           validacion_result.get("resumen", {}).get("firmas_validas", 0),
+        "integridad_ok": validacion_result.get("resumen", {}).get("firmas_integridad_ok", 0),
+        "sin_modificaciones": validacion_result.get("resumen", {}).get("firmas_sin_modificaciones", 0),
+        "crypto_ok": validacion_result.get("resumen", {}).get("firmas_crypto_ok", 0),
+        "chain_ok": validacion_result.get("resumen", {}).get("firmas_chain_ok", 0),
+        "firmas_detalladas": validacion_result.get("firmas", []),
+        "dependencias": validacion_result.get("dependencias", {}),
+        "reporte_legible": generar_reporte_firmas(validacion_result)
+    }
+    
+    # Determinar tipo de firma
+    if resultado["cantidad_firmas"] == 0:
+        resultado["tipo_firma"] = "ninguno"
+    elif resultado["cantidad_firmas"] == 1:
+        firma = resultado["firmas_detalladas"][0] if resultado["firmas_detalladas"] else {}
+        if firma.get("crypto_verification", {}).get("crypto_verification") and \
+           firma.get("chain_validation", {}).get("chain_validation"):
+            resultado["tipo_firma"] = "cualificada"
+        elif firma.get("crypto_verification", {}).get("crypto_verification"):
+            resultado["tipo_firma"] = "avanzada"
+        else:
+            resultado["tipo_firma"] = "basica"
+    else:
+        resultado["tipo_firma"] = "multiple"
+    
+    # Determinar nivel de seguridad
+    if resultado["firmas_validas"] == resultado["cantidad_firmas"] and resultado["cantidad_firmas"] > 0:
+        if resultado["crypto_ok"] == resultado["cantidad_firmas"] and resultado["chain_ok"] == resultado["cantidad_firmas"]:
+            resultado["nivel_seguridad"] = "cualificado"
+        elif resultado["crypto_ok"] == resultado["cantidad_firmas"]:
+            resultado["nivel_seguridad"] = "avanzado"
+        else:
+            resultado["nivel_seguridad"] = "basico"
+    elif resultado["cantidad_firmas"] > 0:
+        resultado["nivel_seguridad"] = "parcial"
+    else:
+        resultado["nivel_seguridad"] = "ninguno"
+    
+    # Generar recomendaciones
+    recomendaciones = []
+    if not resultado["firma_detectada"]:
+        recomendaciones.append("El documento no tiene firmas digitales")
+    elif resultado["firmas_invalidas"] > 0:
+        recomendaciones.append(f"{resultado['firmas_invalidas']} firma(s) inválida(s) detectada(s)")
+    if resultado["sin_modificaciones"] < resultado["cantidad_firmas"]:
+        recomendaciones.append("Se detectaron modificaciones posteriores a la firma")
+    if not resultado["dependencias"].get("asn1crypto"):
+        recomendaciones.append("Instalar asn1crypto para análisis detallado")
+    if not resultado["dependencias"].get("oscrypto"):
+        recomendaciones.append("Instalar oscrypto para verificación criptográfica")
+    if not resultado["dependencias"].get("certvalidator"):
+        recomendaciones.append("Instalar certvalidator para validación de cadena")
+    
+    resultado["recomendaciones"] = recomendaciones
+    
+    return resultado
 
 
 def analizar_firmas_digitales(pdf_bytes: bytes) -> Dict[str, Any]:
@@ -401,15 +500,9 @@ def _analizar_compatibilidad_firma(pdf_bytes: bytes) -> Dict[str, Any]:
 def tiene_firma_digital(pdf_bytes: bytes) -> bool:
     """
     Función simple para mantener compatibilidad con código existente.
-    Equivalente a la función _has_sig original pero más robusta.
+    Usa la nueva funcionalidad de detección avanzada.
     """
-    try:
-        deteccion = _detectar_firmas_basico(pdf_bytes)
-        return deteccion["firma_detectada"]
-    except:
-        # Fallback al método original
-        sample = pdf_bytes[:min(6_000_000, len(pdf_bytes))]
-        return (b"/Sig" in sample) or (b"/DigitalSignature" in sample)
+    return detectar_firmas_pdf_simple(pdf_bytes)
 
 
 def obtener_resumen_firma(analisis_firma: Dict[str, Any]) -> str:
