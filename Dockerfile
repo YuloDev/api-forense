@@ -3,6 +3,7 @@ FROM python:3.12-slim
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Instalar dependencias del sistema
+# qpdf y libstdc++6 son necesarios para pikepdf
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     ca-certificates \
@@ -14,7 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     zlib1g \
     libfreetype6 \
     libharfbuzz0b \
-    qpdf \            # <--- necesario para pikepdf
+    qpdf \
     libstdc++6 \
   && rm -rf /var/lib/apt/lists/*
 
@@ -27,7 +28,7 @@ WORKDIR /app
 COPY requerimientos.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copiar toda la app
+# Copiar toda la aplicación
 COPY . .
 
 # Variables de entorno por defecto
