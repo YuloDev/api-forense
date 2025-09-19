@@ -15,6 +15,8 @@ import base64
 import io
 import hashlib
 import json
+import xml.etree.ElementTree as ET
+import re
 from typing import Dict, Any, List, Optional, Tuple
 from PIL import Image, ExifTags
 import exifread
@@ -23,6 +25,33 @@ import imagehash
 import numpy as np
 from collections import defaultdict
 from .type_conversion import ensure_python_bool, ensure_python_float, safe_serialize_dict
+
+
+def _extract_xmp_dict(img_bytes: bytes) -> Dict[str, str]:
+    """Extrae XMP básico (CreateDate/ModifyDate/DateTimeOriginal) si viene embebido."""
+    start = img_bytes.find(b"<x:xmpmeta")
+    if start == -1:
+        return {}
+    end = img_bytes.find(b"</x:xmpmeta>")
+    if end == -1:
+        return {}
+    xmp_xml = img_bytes[start:end + len(b"</x:xmpmeta>")]
+    try:
+        root = ET.fromstring(xmp_xml)
+    except Exception:
+        return {}
+    # Recolecta atributos típicos en <rdf:Description>
+    ns_xmp = "http://ns.adobe.com/xap/1.0/"
+    ns_exif = "http://ns.adobe.com/exif/1.0/"
+    ns_ps = "http://ns.adobe.com/photoshop/1.0/"
+    nsmap = {"rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#"}
+    data = {}
+    for desc in root.findall(".//rdf:Description", nsmap):
+        for k, v in desc.attrib.items():
+            if any(ns in k for ns in (ns_xmp, ns_exif, ns_ps)):
+                key = k.split("}")[-1]  # último segmento: CreateDate, ModifyDate, etc.
+                data[key] = v
+    return data
 
 
 def detectar_tipo_archivo(archivo_base64: str) -> Dict[str, Any]:
@@ -159,6 +188,13 @@ def analizar_metadatos_imagen(imagen_bytes: bytes) -> Dict[str, Any]:
             for tag, value in exif_tags.items():
                 if not tag.startswith('JPEGThumbnail'):
                     metadatos["exif"][tag] = str(value)
+        except:
+            pass
+        
+        # Extraer metadatos XMP
+        try:
+            xmp_data = _extract_xmp_dict(imagen_bytes)
+            metadatos["xmp"] = xmp_data
         except:
             pass
         

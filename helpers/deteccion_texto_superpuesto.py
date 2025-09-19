@@ -28,8 +28,8 @@ import hashlib
 
 
 # Constantes para análisis por stream
-PA = 0.01  # umbral de % de píxeles distintos para decir "hay cambio"
-PIX_DIFF_THRESHOLD = 0.01  # 1% de píxeles distintos => consideramos que "cambió"
+PA = 0.05  # umbral de % de píxeles distintos para decir "hay cambio" (aumentado de 1% a 5%)
+PIX_DIFF_THRESHOLD = 0.05  # 5% de píxeles distintos => consideramos que "cambió" (aumentado de 1% a 5%)
 
 
 def _render_png(pdf_bytes: bytes, page_index=0, dpi=144) -> Image.Image:
@@ -805,6 +805,53 @@ class TextOverlayDetector:
         return (rect1[0] < rect2[2] and rect1[2] > rect2[0] and 
                 rect1[1] < rect2[3] and rect1[3] > rect2[1])
     
+    def _calcular_factor_contexto(self) -> float:
+        """
+        Calcula un factor de contexto para reducir falsos positivos.
+        
+        Considera:
+        - Fechas de creación y modificación iguales (indica documento original)
+        - Número de streams (muy pocos streams pueden ser normales)
+        - Metadatos del PDF
+        """
+        try:
+            factor = 1.0  # Factor base
+            
+            # Verificar fechas de creación y modificación
+            if hasattr(self.doc, 'metadata') and self.doc.metadata:
+                metadata = dict(self.doc.metadata)
+                creation_date = metadata.get('creationDate', '')
+                mod_date = metadata.get('modDate', '')
+                
+                # Si las fechas son iguales, es menos probable que sea editado
+                if creation_date and mod_date and creation_date == mod_date:
+                    factor *= 0.3  # Reducir significativamente la probabilidad
+                
+                # Si el productor es conocido (como iText), puede ser normal tener múltiples streams
+                producer = metadata.get('producer', '').lower()
+                if 'itext' in producer or 'adobe' in producer:
+                    factor *= 0.7  # Reducir ligeramente
+            
+            # Verificar número de streams
+            total_streams = 0
+            for page_num in range(self.doc.page_count):
+                page = self.doc[page_num]
+                contents = page.get_contents()
+                if contents:
+                    if isinstance(contents, list):
+                        total_streams += len(contents)
+                    else:
+                        total_streams += 1
+            
+            # Si hay muy pocos streams (1-2), es menos sospechoso
+            if total_streams <= 2:
+                factor *= 0.5
+            
+            return max(factor, 0.1)  # Mínimo factor de 0.1
+            
+        except Exception:
+            return 1.0  # Si hay error, usar factor neutro
+    
     def _generate_summary(self) -> Dict[str, Any]:
         """Genera un resumen general del análisis con la nueva estructura"""
         
@@ -823,7 +870,7 @@ class TextOverlayDetector:
         ]
         overlay_probability = max(probabilidades) if probabilidades else 0.0
         
-        # Determinar nivel de riesgo
+        # Determinar nivel de riesgo (umbrales más altos para reducir falsos positivos)
         niveles_riesgo = [
             analisis_avanzado.get("nivel_riesgo", "LOW"),
             analisis_stream.get("nivel_riesgo", "LOW"),
@@ -831,10 +878,14 @@ class TextOverlayDetector:
             analisis_imagenes.get("nivel_riesgo_imagenes", "LOW")
         ]
         
-        if "HIGH" in niveles_riesgo or overlay_probability >= 0.7:
+        # Contar cuántos análisis indican HIGH
+        high_count = niveles_riesgo.count("HIGH")
+        
+        # Lógica más sensible para detectar riesgo
+        if high_count >= 1 or overlay_probability >= 0.6:
             risk_level = "HIGH"
             recommendations = ["Alto riesgo de texto superpuesto detectado"]
-        elif "MEDIUM" in niveles_riesgo or overlay_probability >= 0.4:
+        elif overlay_probability >= 0.3:
             risk_level = "MEDIUM"
             recommendations = ["Riesgo medio de texto superpuesto"]
         else:
@@ -1109,10 +1160,14 @@ class TextOverlayDetector:
             if total_streams > 0:
                 probabilidad_stream = len(streams_sospechosos) / len(resultados_paginas)
             
-            # Determinar nivel de riesgo
-            if probabilidad_stream >= 0.8:
+            # Aplicar factor de contexto para reducir falsos positivos
+            factor_contexto = self._calcular_factor_contexto()
+            probabilidad_stream *= factor_contexto
+            
+            # Determinar nivel de riesgo (umbrales ajustados)
+            if probabilidad_stream >= 0.6:
                 nivel_riesgo = "HIGH"
-            elif probabilidad_stream >= 0.4:
+            elif probabilidad_stream >= 0.3:
                 nivel_riesgo = "MEDIUM"
             else:
                 nivel_riesgo = "LOW"
@@ -1175,10 +1230,14 @@ class TextOverlayDetector:
             if total_elementos > 0:
                 probabilidad_capas = total_cambios / total_elementos
             
-            # Determinar nivel de riesgo
-            if probabilidad_capas >= 0.8:
+            # Aplicar factor de contexto para reducir falsos positivos
+            factor_contexto = self._calcular_factor_contexto()
+            probabilidad_capas *= factor_contexto
+            
+            # Determinar nivel de riesgo (umbrales ajustados)
+            if probabilidad_capas >= 0.6:
                 nivel_riesgo = "HIGH"
-            elif probabilidad_capas >= 0.4:
+            elif probabilidad_capas >= 0.3:
                 nivel_riesgo = "MEDIUM"
             else:
                 nivel_riesgo = "LOW"

@@ -338,6 +338,11 @@ def _generate_capas_check_from_complete_response(capas_analisis_completo: Dict[s
     nivel_avanzado = capas_analisis_completo.get("analisis_avanzado_overlay", {}).get("nivel_riesgo", "LOW")
     nivel_imagenes = capas_analisis_completo.get("analisis_imagenes", {}).get("nivel_riesgo_imagenes", "LOW")
     
+    print(f"DEBUG: Niveles de riesgo detectados:")
+    print(f"  - analisis_por_capas: {nivel_capas}")
+    print(f"  - analisis_avanzado_overlay: {nivel_avanzado}")
+    print(f"  - analisis_imagenes: {nivel_imagenes}")
+    
     # Usar el nivel de riesgo más alto
     niveles = [nivel_capas, nivel_avanzado, nivel_imagenes]
     if "HIGH" in niveles:
@@ -347,26 +352,32 @@ def _generate_capas_check_from_complete_response(capas_analisis_completo: Dict[s
     else:
         nivel_riesgo = "LOW"
     
-    # Calcular penalización dinámica según nivel de riesgo
+    print(f"DEBUG: Nivel de riesgo final calculado: {nivel_riesgo}")
+    
+    # Calcular penalización basada en el nivel de riesgo del helper deteccion_texto_superpuesto
     peso_base = RISK_WEIGHTS.get("capas_multiples", 5)  # Valor base de capas_multiples
+    
     if nivel_riesgo == "HIGH":
-        penalizacion = peso_base  # Penalización completa
+        penalizacion = peso_base  # 100% del valor de capas_multiples
+        print(f"DEBUG: Nivel de riesgo HIGH - Penalización completa: {penalizacion} puntos")
     elif nivel_riesgo == "MEDIUM":
-        penalizacion = peso_base // 2  # Mitad de la penalización
+        penalizacion = peso_base // 2  # 50% del valor de capas_multiples
+        print(f"DEBUG: Nivel de riesgo MEDIUM - Penalización mitad: {penalizacion} puntos")
     else:  # LOW
-        penalizacion = 0  # Sin penalización
+        penalizacion = 0  # 0% - Sin penalización
+        print(f"DEBUG: Nivel de riesgo LOW - Sin penalización: {penalizacion} puntos")
     
     # Generar explicación de penalización
-    penalty_explanation = f"Penalización dinámica calculada: {penalizacion} puntos para {probabilidad*100:.1f}% de probabilidad (nivel: {nivel_riesgo})"
+    penalty_explanation = f"Penalización basada en nivel de riesgo: {nivel_riesgo} - {penalizacion} puntos ({peso_base} base × {100 if nivel_riesgo == 'HIGH' else 50 if nivel_riesgo == 'MEDIUM' else 0}%)"
     
     # Generar resumen con la estructura exacta solicitada usando datos del resumen_general
     resumen = {
         "probabilidad_manipulacion": resumen_general.get("probabilidad_manipulacion", probabilidad),
-        "nivel_riesgo": resumen_general.get("nivel_riesgo", nivel_riesgo),
+        "nivel_riesgo": nivel_riesgo,  # Usar el nivel_riesgo calculado, no el del resumen_general
         "total_zones_analyzed": resumen_general.get("total_zones_analyzed", 8),
         "zones_with_overlay": resumen_general.get("zones_with_overlay", 0),
         "overlay_probability": resumen_general.get("overlay_probability", probabilidad),
-        "risk_level": resumen_general.get("risk_level", nivel_riesgo),
+        "risk_level": nivel_riesgo,  # Usar el nivel_riesgo calculado, no el del resumen_general
         "recommendations": resumen_general.get("recommendations", []),
         "analisis_avanzado": resumen_general.get("analisis_avanzado", {}),
         "analisis_por_stream": resumen_general.get("analisis_por_stream", {}),

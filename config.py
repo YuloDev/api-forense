@@ -42,6 +42,18 @@ else:
         "cifrado_permisos_extra": 2,
         "math_consistency": 10,
         "sri_verificacion": 20,
+        "extraccion_texto_ocr": 30,
+        "campos_criticos_factura": 40,
+        "clave_acceso_sri": 20,
+        "doble_compresion_detectada": 15,
+        "inconsistencias_ruido_bordes": 18,
+        "analisis_ela_sospechoso": 12,
+        "analisis_phash_sospechoso": 10,
+        "analisis_ssim_sospechoso": 8,
+        "metadatos_sospechosos": 5,
+        "texto_superpuesto": 25,
+        "capas_ocultas": 20,
+        "evidencias_forenses": 15,
     }
 
 # Cargar descripciones de RISK_WEIGHTS
@@ -130,6 +142,66 @@ else:
             "valor": 20,
             "descripcion": "Verificación exitosa contra el SRI (Servicio de Rentas Internas)",
             "explicacion": "La capacidad de verificar el documento contra registros oficiales del SRI aumenta significativamente la confiabilidad."
+        },
+        "extraccion_texto_ocr": {
+            "valor": 30,
+            "descripcion": "Extracción de texto mediante OCR (Reconocimiento Óptico de Caracteres)",
+            "explicacion": "La incapacidad de extraer texto legible de una imagen puede indicar manipulación, baja calidad o formato no estándar."
+        },
+        "campos_criticos_factura": {
+            "valor": 40,
+            "descripcion": "Presencia de campos críticos de factura (RUC, Razón Social, Fecha, Total)",
+            "explicacion": "La ausencia de campos esenciales de facturación puede indicar que la imagen no es una factura legítima o que ha sido manipulada."
+        },
+        "clave_acceso_sri": {
+            "valor": 20,
+            "descripcion": "Presencia de clave de acceso SRI válida",
+            "explicacion": "Sin clave de acceso SRI no se puede validar la autenticidad del documento contra registros oficiales."
+        },
+        "doble_compresion_detectada": {
+            "valor": 15,
+            "descripcion": "Detección de doble compresión en imagen JPEG",
+            "explicacion": "La compresión múltiple puede indicar que la imagen fue editada y re-guardada, sugiriendo manipulación."
+        },
+        "inconsistencias_ruido_bordes": {
+            "valor": 18,
+            "descripcion": "Inconsistencias en patrones de ruido y bordes",
+            "explicacion": "Patrones de ruido inconsistentes pueden indicar edición local, clonado o pegado de elementos."
+        },
+        "analisis_ela_sospechoso": {
+            "valor": 12,
+            "descripcion": "Análisis ELA (Error Level Analysis) sospechoso",
+            "explicacion": "El ELA detecta áreas de la imagen que han sido editadas o re-comprimidas, indicando posible manipulación."
+        },
+        "analisis_phash_sospechoso": {
+            "valor": 10,
+            "descripcion": "Análisis de hash perceptual (pHash) sospechoso",
+            "explicacion": "Diferencias significativas en hash perceptual por bloques pueden indicar edición local o pegado de elementos."
+        },
+        "analisis_ssim_sospechoso": {
+            "valor": 8,
+            "descripcion": "Análisis SSIM (Structural Similarity Index) regional sospechoso",
+            "explicacion": "Baja similitud estructural entre regiones puede indicar áreas editadas o elementos pegados."
+        },
+        "metadatos_sospechosos": {
+            "valor": 5,
+            "descripcion": "Metadatos EXIF/IPTC/XMP sospechosos o inconsistentes",
+            "explicacion": "Metadatos faltantes, inconsistentes o con información sospechosa pueden indicar manipulación."
+        },
+        "texto_superpuesto": {
+            "valor": 25,
+            "descripcion": "Detección de texto superpuesto en imagen",
+            "explicacion": "Texto superpuesto puede indicar que se agregó información sobre el documento original."
+        },
+        "capas_ocultas": {
+            "valor": 20,
+            "descripcion": "Presencia de capas ocultas en formatos que las soportan",
+            "explicacion": "Capas ocultas pueden contener información no visible que modifica el contenido aparente del documento."
+        },
+        "evidencias_forenses": {
+            "valor": 15,
+            "descripcion": "Evidencias forenses generales de manipulación",
+            "explicacion": "Indicadores técnicos que sugieren que la imagen ha sido modificada o manipulada digitalmente."
         }
     }
     

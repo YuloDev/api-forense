@@ -29,7 +29,6 @@ from helpers.deteccion_firma_simple import detectar_firma_desde_base64
 from routes.validacion_firma_universal import _extraer_numero_autorizacion_pdf
 from helpers.analisis_sri_ride import analizar_documento_sri
 from helpers.validacion_xades import validar_xades
-from helpers.analisis_imagenes import analizar_imagen_completa, detectar_tipo_archivo
 from sri import sri_autorizacion_por_clave, parse_autorizacion_response
 
 # Funciones para validación SRI (copiadas del endpoint universal)
@@ -458,7 +457,6 @@ router = APIRouter()
 
 class Peticion(BaseModel):
     pdfbase64: str  # Mantener compatibilidad con nombre existente
-    tipo_archivo: str = "auto"  # "auto", "pdf", "imagen" - se detecta automáticamente si es "auto"
 
 
 def is_scanned_image_pdf(pdf_bytes: bytes, extracted_text: str) -> bool:
@@ -488,20 +486,16 @@ async def validar_factura(req: Peticion):
         raise HTTPException(status_code=413, detail=f"El archivo excede el tamaño máximo permitido ({MAX_PDF_BYTES} bytes).")
     log_step("1) decode base64", t0)
 
-    # 1.1) Detectar tipo de archivo
+    # Validar que sea un PDF válido
     t0 = time.perf_counter()
-    if req.tipo_archivo == "auto":
-        tipo_info = detectar_tipo_archivo(req.pdfbase64)
-        if not tipo_info["valido"]:
-            raise HTTPException(status_code=400, detail=f"Archivo no válido: {tipo_info.get('error', 'Tipo desconocido')}")
-        tipo_archivo = tipo_info["tipo"]
-    else:
-        tipo_archivo = req.tipo_archivo.upper()
-    log_step("1.1) detectar tipo archivo", t0)
-
-    # Si es imagen, procesar con análisis forense
-    if tipo_archivo != "PDF":
-        return await _procesar_imagen_factura(archivo_bytes, req.pdfbase64, tipo_archivo)
+    try:
+        # Intentar abrir como PDF para validar
+        import fitz
+        doc = fitz.open(stream=archivo_bytes, filetype="pdf")
+        doc.close()
+    except Exception:
+        raise HTTPException(status_code=400, detail="El archivo no es un PDF válido.")
+    log_step("1.1) validar PDF", t0)
 
     # 2) texto directo con pdfminer
     t0 = time.perf_counter()
@@ -1022,114 +1016,3 @@ async def validar_factura(req: Peticion):
     )
 
 
-async def _procesar_imagen_factura(archivo_bytes: bytes, archivo_base64: str, tipo_archivo: str) -> JSONResponse:
-    """
-    Procesa una imagen de factura con análisis forense completo.
-    
-    Args:
-        archivo_bytes: Bytes de la imagen
-        archivo_base64: Imagen codificada en base64
-        tipo_archivo: Tipo de archivo detectado
-        
-    Returns:
-        JSONResponse con análisis forense completo de la imagen
-    """
-    try:
-        # Realizar análisis forense completo de la imagen
-        analisis_imagen = analizar_imagen_completa(archivo_base64)
-        
-        if "error" in analisis_imagen:
-            return JSONResponse(
-                status_code=400,
-                content=safe_serialize_dict({
-                    "sri_verificado": False,
-                    "mensaje": f"Error analizando imagen: {analisis_imagen['error']}",
-                    "tipo_archivo": tipo_archivo,
-                    "riesgo": {
-                        "nivel": "ALTO",
-                        "puntuacion": 100,
-                        "indicadores": [f"Error en análisis: {analisis_imagen['error']}"]
-                    },
-                    "validacion_firmas": {
-                        "resumen": {"total_firmas": 0, "firmas_validas": 0, "firmas_invalidas": 0, "con_certificados": 0, "con_timestamps": 0, "con_politicas": 0, "porcentaje_validas": 0},
-                        "dependencias": {"asn1crypto": False, "oscrypto": False, "certvalidator": False},
-                        "analisis_sri": {"es_documento_sri": False, "ruc_emisor": None, "razon_social": None, "numero_documento": None, "fecha_emision": None, "clave_acceso": None, "ambiente": None, "tipo_emision": None},
-                        "validacion_pdf": {"firma_detectada": False, "tipo_firma": "ninguna", "es_pades": False, "metadatos": {"numero_firmas": 0}},
-                        "tipo_documento": tipo_archivo.lower(),
-                        "firma_detectada": False
-                    }
-                })
-            )
-        
-        # Extraer información del análisis
-        probabilidad_manipulacion = analisis_imagen.get("probabilidad_manipulacion", 0.0)
-        nivel_riesgo = analisis_imagen.get("nivel_riesgo", "UNKNOWN")
-        indicadores = analisis_imagen.get("indicadores", [])
-        
-        # Determinar nivel de riesgo basado en la probabilidad
-        if probabilidad_manipulacion >= 0.7:
-            nivel_riesgo_final = "ALTO"
-            puntuacion_riesgo = min(100, int(probabilidad_manipulacion * 100))
-        elif probabilidad_manipulacion >= 0.4:
-            nivel_riesgo_final = "MEDIO"
-            puntuacion_riesgo = int(probabilidad_manipulacion * 80)
-        else:
-            nivel_riesgo_final = "BAJO"
-            puntuacion_riesgo = int(probabilidad_manipulacion * 50)
-        
-        # Crear estructura de riesgo similar al endpoint de PDF
-        riesgo = {
-            "nivel": nivel_riesgo_final,
-            "puntuacion": puntuacion_riesgo,
-            "indicadores": indicadores,
-            "probabilidad_manipulacion": probabilidad_manipulacion,
-            "analisis_forense": analisis_imagen.get("analisis_forense", {}),
-            "metadatos": analisis_imagen.get("metadatos", {}),
-            "capas": analisis_imagen.get("capas", {}),
-            "superposicion": analisis_imagen.get("superposicion", {})
-        }
-        
-        # Crear validación de firmas para imágenes (siempre será falsa)
-        validacion_firmas = {
-            "resumen": {"total_firmas": 0, "firmas_validas": 0, "firmas_invalidas": 0, "con_certificados": 0, "con_timestamps": 0, "con_politicas": 0, "porcentaje_validas": 0},
-            "dependencias": {"asn1crypto": False, "oscrypto": False, "certvalidator": False},
-            "analisis_sri": {"es_documento_sri": False, "ruc_emisor": None, "razon_social": None, "numero_documento": None, "fecha_emision": None, "clave_acceso": None, "ambiente": None, "tipo_emision": None},
-            "validacion_pdf": {"firma_detectada": False, "tipo_firma": "ninguna", "es_pades": False, "metadatos": {"numero_firmas": 0}},
-            "tipo_documento": tipo_archivo.lower(),
-            "firma_detectada": False
-        }
-        
-        return JSONResponse(
-            status_code=200,
-            content=safe_serialize_dict({
-                "sri_verificado": False,
-                "mensaje": f"Análisis forense de imagen {tipo_archivo} completado. No se puede validar con SRI (solo PDFs).",
-                "tipo_archivo": tipo_archivo,
-                "riesgo": riesgo,
-                "validacion_firmas": validacion_firmas,
-                "analisis_detallado": analisis_imagen
-            })
-        )
-        
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content=safe_serialize_dict({
-                "sri_verificado": False,
-                "mensaje": f"Error interno procesando imagen: {str(e)}",
-                "tipo_archivo": tipo_archivo,
-                "riesgo": {
-                    "nivel": "ALTO",
-                    "puntuacion": 100,
-                    "indicadores": [f"Error interno: {str(e)}"]
-                },
-                "validacion_firmas": {
-                    "resumen": {"total_firmas": 0, "firmas_validas": 0, "firmas_invalidas": 0, "con_certificados": 0, "con_timestamps": 0, "con_politicas": 0, "porcentaje_validas": 0},
-                    "dependencias": {"asn1crypto": False, "oscrypto": False, "certvalidator": False},
-                    "analisis_sri": {"es_documento_sri": False, "ruc_emisor": None, "razon_social": None, "numero_documento": None, "fecha_emision": None, "clave_acceso": None, "ambiente": None, "tipo_emision": None},
-                    "validacion_pdf": {"firma_detectada": False, "tipo_firma": "ninguna", "es_pades": False, "metadatos": {"numero_firmas": 0}},
-                    "tipo_documento": tipo_archivo.lower(),
-                    "firma_detectada": False
-                }
-            })
-        )
