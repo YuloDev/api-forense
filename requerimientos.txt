@@ -26,6 +26,8 @@ imagehash==4.3.1     # <--- 🚨 agregado
 
 exifread==3.0.0     # <--- 🚨 agregado
 
+piexif==1.1.3     # <--- 🚨 agregado
+
 # SRI SOAP client
 zeep==4.3.1
 requests==2.32.5
