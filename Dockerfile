@@ -2,6 +2,7 @@ FROM python:3.12-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 
+# Instalar dependencias del sistema
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     ca-certificates \
@@ -13,21 +14,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     zlib1g \
     libfreetype6 \
     libharfbuzz0b \
+    qpdf \            # <--- necesario para pikepdf
+    libstdc++6 \
   && rm -rf /var/lib/apt/lists/*
 
-
+# Actualizar pip y herramientas de instalación
 RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel
 
 WORKDIR /app
 
-# Instalar dependencias primero para aprovechar cache
+# Instalar dependencias de Python primero para aprovechar cache
 COPY requerimientos.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copiar toda la aplicación (ya que está en raíz)
+# Copiar toda la app
 COPY . .
 
-# Variables por defecto (puedes sobreescribir con -e)
+# Variables de entorno por defecto
 ENV UVICORN_HOST=0.0.0.0 \
     UVICORN_PORT=8000 \
     EASYOCR_GPU=false \
@@ -39,9 +42,9 @@ ENV UVICORN_HOST=0.0.0.0 \
 
 EXPOSE 8000
 
-# Usuario no root
+# Crear usuario no root
 RUN useradd -ms /bin/bash appuser && chown -R appuser /app
 USER appuser
 
-# Comando de arranque con Uvicorn
+# Arranque de la aplicación
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
