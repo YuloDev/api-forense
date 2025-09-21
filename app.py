@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routes import health, validar, validar_documento, config, risk_levels, alineacion, reclamos, deteccion_texto, validacion_firma_universal, validar_imagen
+from routes import health, validar, validar_documento, config, risk_levels, alineacion, reclamos, deteccion_texto, validacion_firma_universal, validar_imagen, validar_factura
  
 app = FastAPI(
     title="Validador SRI + OCR + Comparación productos + Riesgo",
@@ -41,5 +41,6 @@ app.include_router(reclamos.router)
 app.include_router(deteccion_texto.router)
 app.include_router(validacion_firma_universal.router)
 app.include_router(validar_imagen.router)
+app.include_router(validar_factura.router)
  
  

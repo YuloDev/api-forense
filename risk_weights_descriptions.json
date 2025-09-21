@@ -143,5 +143,15 @@
     "valor": 15,
     "descripcion": "Evidencias forenses generales de manipulación",
     "explicacion": "Indicadores técnicos que sugieren que la imagen ha sido modificada o manipulada digitalmente."
+  },
+  "inconsistencia_financiera_items_subtotal": {
+    "valor": 25,
+    "descripcion": "Inconsistencia entre suma de ítems y subtotal sin impuestos",
+    "explicacion": "La suma de los ítems individuales debe coincidir con el subtotal sin impuestos. Una diferencia indica posible manipulación de totales."
+  },
+  "inconsistencia_financiera_total_recompuesto": {
+    "valor": 30,
+    "descripcion": "Inconsistencia entre total recompuesto y total declarado",
+    "explicacion": "El total calculado (subtotal + impuestos - descuentos) debe coincidir con el total declarado. Una diferencia indica manipulación financiera."
   }
 }

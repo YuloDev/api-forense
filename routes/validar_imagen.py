@@ -26,6 +26,9 @@ from utils import log_step, normalize_comprobante_xml, strip_accents, _to_float
 from helpers.type_conversion import safe_serialize_dict
 from helpers.analisis_imagenes import analizar_imagen_completa, detectar_tipo_archivo
 from helpers.analisis_forense_avanzado import analisis_forense_completo
+from helpers.forensics_avanzado import analizar_forensics_avanzado
+from helpers.invoice_capture_parser import parse_capture_from_bytes
+from helpers.sri_validator import integrar_validacion_sri
 from sri import sri_autorizacion_por_clave, parse_autorizacion_response
 from PIL import ExifTags
 
@@ -313,6 +316,55 @@ def _evaluar_riesgo_imagen(imagen_bytes: bytes, texto_extraido: str, campos_fact
         tiene_metadatos_exif = bool(exif_data)
         tiene_metadatos_xmp = bool(xmp_data)
         
+        # 2.1. Validación SRI (PRIORITARIO)
+        validacion_sri = campos_factura.get("validacion_sri", {})
+        sri_verificado = campos_factura.get("sri_verificado", False)
+        clave_acceso = campos_factura.get("claveAcceso", "")
+        
+        penalizacion_sri = 0
+        if not sri_verificado and clave_acceso:
+            penalizacion_sri = 25  # Penalización alta por SRI no verificado
+            score += penalizacion_sri
+        elif not clave_acceso:
+            penalizacion_sri = 15  # Penalización media por falta de clave de acceso
+            score += penalizacion_sri
+        
+        prioritarias.append({
+            "check": "Validación SRI",
+            "detalle": {
+                "sri_verificado": sri_verificado,
+                "clave_acceso": clave_acceso,
+                "clave_valida": validacion_sri.get("valido", False),
+                "estado_sri": validacion_sri.get("consulta_sri", {}).get("estado", "No disponible"),
+                "fecha_autorizacion": validacion_sri.get("consulta_sri", {}).get("fecha_autorizacion", "No disponible"),
+                "ruc_emisor": validacion_sri.get("componentes", {}).get("ruc_emisor", "No disponible"),
+                "tipo_comprobante": validacion_sri.get("componentes", {}).get("tipo_comprobante", "No disponible"),
+                "serie": validacion_sri.get("componentes", {}).get("serie", "No disponible"),
+                "secuencial": validacion_sri.get("componentes", {}).get("secuencial", "No disponible"),
+                "interpretacion": "Factura validada exitosamente con SRI" if sri_verificado else "Factura no validada con SRI - posible documento falso",
+                "posibles_causas": [
+                    "Documento no autorizado por SRI",
+                    "Clave de acceso inválida o corrupta",
+                    "Documento modificado después de autorización",
+                    "Error en extracción de datos",
+                    "Documento de prueba o borrador"
+                ] if not sri_verificado else [
+                    "Documento válido según SRI",
+                    "Clave de acceso correcta",
+                    "Autorización vigente"
+                ],
+                "indicadores_clave": [
+                    f"SRI Verificado: {'Sí' if sri_verificado else 'No'}",
+                    f"Clave Acceso: {clave_acceso[:10]}..." if clave_acceso else "No disponible",
+                    f"Estado SRI: {validacion_sri.get('consulta_sri', {}).get('estado', 'No disponible')}",
+                    f"RUC Emisor: {validacion_sri.get('componentes', {}).get('ruc_emisor', 'No disponible')}",
+                    f"Tipo: {validacion_sri.get('componentes', {}).get('tipo_comprobante', 'No disponible')}"
+                ],
+                "recomendacion": "Documento válido según SRI - verificar autenticidad del canal de origen" if sri_verificado else "Documento no validado con SRI - alto riesgo de falsificación"
+            },
+            "penalizacion": penalizacion_sri
+        })
+        
         prioritarias.append({
             "check": "Fecha de modificación vs fecha de creación",
             "detalle": {
@@ -351,6 +403,581 @@ def _evaluar_riesgo_imagen(imagen_bytes: bytes, texto_extraido: str, campos_fact
             "penalizacion": penalizacion_fechas
         })
         
+        # 2.3. Análisis forense - Ruido y bordes (PRIORITARIO)
+        from helpers.ruido_bordes_analisis import analizar_ruido_y_bordes
+        
+        # Realizar análisis robusto de ruido y bordes
+        try:
+            ruido_analisis = analizar_ruido_y_bordes(imagen_bytes)
+        except Exception as e:
+            print(f"Error en análisis de ruido y bordes: {e}")
+            ruido_analisis = {
+                "tiene_edicion_local": False,
+                "nivel_sospecha": "BAJO",
+                "laplacian_variance_global": 0,
+                "edge_density_global": 0,
+                "outliers": {"ratio": 0},
+                "clusters": {"localized": 0},
+                "halo_ratio": 0,
+                "lines": {"total": 0, "parallel_groups": 0, "in_cluster_ratio": 0}
+            }
+        
+        penalizacion_ruido = 0
+        if ruido_analisis.get("tiene_edicion_local", False):
+            penalizacion_ruido = 18  # Penalización alta por edición local detectada
+            score += penalizacion_ruido
+        
+        prioritarias.append({
+            "check": "Ruido y bordes",
+            "detalle": {
+                "detectado": ruido_analisis.get("tiene_edicion_local", False),
+                "nivel_sospecha": ruido_analisis.get("nivel_sospecha", "BAJO"),
+                "laplacian_variance": ruido_analisis.get("laplacian_variance_global", 0),
+                "edge_density": ruido_analisis.get("edge_density_global", 0),
+                "num_lines": ruido_analisis.get("lines", {}).get("total", 0),
+                "parallel_lines": ruido_analisis.get("lines", {}).get("parallel_groups", 0),
+                "outlier_ratio": ruido_analisis.get("outliers", {}).get("ratio", 0),
+                "halo_ratio": ruido_analisis.get("halo_ratio", 0),
+                "clusters_localizados": ruido_analisis.get("clusters", {}).get("localized", 0),
+                "interpretacion": "Análisis de ruido y bordes detecta inconsistencias en patrones locales" if ruido_analisis.get("tiene_edicion_local", False) else "Análisis de ruido y bordes no detecta edición local",
+                "posibles_causas": [
+                    "Edición local con herramientas de clonado",
+                    "Pegado de elementos con diferentes niveles de ruido",
+                    "Aplicación de filtros selectivos",
+                    "Modificación de áreas específicas",
+                    "Halos alrededor de trazos (ratio halo ≳ 0.45)",
+                    "Líneas paralelas anómalas"
+                ] if ruido_analisis.get("tiene_edicion_local", False) else [
+                    "Imagen sin evidencia de edición local",
+                    "Patrones de ruido consistentes",
+                    "Bordes naturales sin manipulación"
+                ],
+                "indicadores_clave": [
+                    f"Ratio de outliers: {ruido_analisis.get('outliers', {}).get('ratio', 0):.2%}",
+                    f"Densidad de bordes: {ruido_analisis.get('edge_density_global', 0):.2%}",
+                    f"Líneas paralelas: {ruido_analisis.get('lines', {}).get('parallel_groups', 0)}",
+                    f"Varianza Laplaciano: {ruido_analisis.get('laplacian_variance_global', 0):.2f}",
+                    f"Ratio halo: {ruido_analisis.get('halo_ratio', 0):.2%}",
+                    f"Clústeres localizados: {ruido_analisis.get('clusters', {}).get('localized', 0)}"
+                ],
+                "recomendacion": "Examinar áreas con patrones de ruido inconsistentes - posible edición local" if ruido_analisis.get("tiene_edicion_local", False) else "Imagen sin evidencia de edición local en análisis de ruido y bordes",
+                "umbral_sugerido": "outlier_ratio > 5% y hay clúster/es localizados (no uniforme en toda la imagen)",
+                "señales": [
+                    "Varianza de Laplaciano muy distinta entre regiones",
+                    "Edge_density alto en parches rectangulares", 
+                    "Halos alrededor de trazos (ratio halo ≳ 0.45)",
+                    "Líneas paralelas anómalas"
+                ],
+                "analisis_detallado": {
+                    "grid": ruido_analisis.get("grid", {}),
+                    "robust_stats": ruido_analisis.get("robust_stats", {}),
+                    "outliers": ruido_analisis.get("outliers", {}),
+                    "clusters": ruido_analisis.get("clusters", {}),
+                    "lines": ruido_analisis.get("lines", {})
+                }
+            },
+            "penalizacion": penalizacion_ruido
+        })
+        
+        # 2.4. Análisis forense avanzado (PRIORITARIO)
+        forensics_avanzado = analisis_forense.get("forensics_avanzado", {})
+        penalizacion_forensics = 0
+        
+        if forensics_avanzado.get("disponible", False):
+            score_forensics = forensics_avanzado.get("score_total", 0)
+            if score_forensics > 0:
+                # Convertir score 0-100 a penalización 0-25
+                penalizacion_forensics = min(25, int(score_forensics * 0.25))
+                score += penalizacion_forensics
+        
+        prioritarias.append({
+            "check": "Análisis forense avanzado",
+            "detalle": {
+                "disponible": forensics_avanzado.get("disponible", False),
+                "score_total": forensics_avanzado.get("score_total", 0),
+                "nivel_sospecha": forensics_avanzado.get("nivel_sospecha", "No disponible"),
+                "metodologia": forensics_avanzado.get("metodologia", "forensics_avanzado"),
+                "metricas": forensics_avanzado.get("metricas", {}),
+                "scores_detallados": forensics_avanzado.get("scores_detallados", {}),
+                "metadatos": forensics_avanzado.get("metadatos", {}),
+                "validacion_temporal": forensics_avanzado.get("validacion_temporal", {}),
+                "copy_move_analysis": forensics_avanzado.get("copy_move_analysis", {}),
+                "interpretacion": forensics_avanzado.get("interpretacion", {}),
+                "error": forensics_avanzado.get("error") if not forensics_avanzado.get("disponible", False) else None,
+                "explicacion": "Análisis forense avanzado usando técnicas ELA, Copy-Move, validación temporal y análisis de metadatos" if forensics_avanzado.get("disponible", False) else "Análisis forense avanzado no disponible",
+                "posibles_causas": [
+                    "Recompresión JPEG detectada (ELA ratio > 1.2)",
+                    "Regiones clonadas encontradas (Copy-Move)",
+                    "Inconsistencias en metadatos temporales",
+                    "Software de edición detectado",
+                    "Fechas futuras o inconsistentes",
+                    "Metadatos EXIF mínimos o ausentes"
+                ] if forensics_avanzado.get("disponible", False) and forensics_avanzado.get("score_total", 0) > 0 else [
+                    "Análisis forense avanzado no detectó alteraciones",
+                    "Metadatos consistentes",
+                    "Sin evidencia de recompresión",
+                    "Sin regiones clonadas detectadas"
+                ],
+                "indicadores_clave": [
+                    f"ELA Ratio: {forensics_avanzado.get('metricas', {}).get('ela_ratio', 0):.4f}",
+                    f"Outlier Rate: {forensics_avanzado.get('metricas', {}).get('outlier_rate', 0):.4f}",
+                    f"Copy-Move Matches: {forensics_avanzado.get('metricas', {}).get('copy_move_matches', 0)}",
+                    f"Quality Slope: {forensics_avanzado.get('metricas', {}).get('quality_slope', 0):.4f}",
+                    f"EXIF Presente: {forensics_avanzado.get('metadatos', {}).get('exif_presente', False)}",
+                    f"Fechas Encontradas: {forensics_avanzado.get('metadatos', {}).get('fechas_encontradas', 0)}"
+                ] if forensics_avanzado.get("disponible", False) else [
+                    "Análisis no disponible"
+                ],
+                "recomendacion": "Examinar detalladamente las métricas forenses - posible manipulación detectada" if forensics_avanzado.get("disponible", False) and forensics_avanzado.get("score_total", 0) > 25 else "Análisis forense avanzado no detecta alteraciones significativas" if forensics_avanzado.get("disponible", False) else "Análisis forense avanzado no disponible - usar otros métodos de validación",
+                "umbral_sugerido": "Score > 25 indica sospecha moderada, Score > 50 indica alta sospecha",
+                "señales": [
+                    "ELA ratio > 1.2 (recompresión sospechosa)",
+                    "Outlier rate > 15% (patrones anómalos)",
+                    "Copy-Move matches > 0 (regiones clonadas)",
+                    "Quality slope anómalo",
+                    "Metadatos EXIF ausentes o mínimos",
+                    "Fechas inconsistentes o futuras"
+                ] if forensics_avanzado.get("disponible", False) else [
+                    "Análisis no disponible"
+                ],
+                "analisis_detallado": forensics_avanzado
+            },
+            "penalizacion": penalizacion_forensics
+        })
+        
+        # 2.4. Análisis ELA focalizado (PRIORITARIO si es local con texto)
+        from helpers.ela_focalizado_analisis import analizar_ela_focalizado
+
+        # Realizar análisis ELA focalizado
+        try:
+            ela_analisis = analizar_ela_focalizado(imagen_bytes)
+        except Exception as e:
+            print(f"Error en análisis ELA focalizado: {e}")
+            ela_analisis = {
+                "ela": {
+                    "marca_editada": False,
+                    "nivel_sospecha": "SECUNDARIO",
+                    "clusters": {"localized": 0},
+                    "texto": {"overlap_text": False, "overlap_digits": False, "peak_hits": 0},
+                    "global": {"mean": 0, "std": 0, "max": 0},
+                    "suspicious_global_ratio": 0
+                }
+            }
+
+        # Determinar si va a prioritarias o secundarias
+        es_prioritario = ela_analisis.get("ela", {}).get("nivel_sospecha") == "PRIORITARIO"
+        es_secundario = ela_analisis.get("ela", {}).get("nivel_sospecha") == "SECUNDARIO"
+
+        penalizacion_ela = 0
+        if ela_analisis.get("ela", {}).get("marca_editada", False):
+            if es_prioritario:
+                penalizacion_ela = 20  # Penalización alta por ELA prioritario
+            else:
+                penalizacion_ela = 12  # Penalización media por ELA secundario
+            score += penalizacion_ela
+
+        # Crear el check de ELA
+        ela_check = {
+            "check": "ELA (Error Level Analysis) focalizado",
+            "detalle": {
+                "detectado": ela_analisis.get("ela", {}).get("marca_editada", False),
+                "nivel_sospecha": ela_analisis.get("ela", {}).get("nivel_sospecha", "SECUNDARIO"),
+                "clusters_localizados": ela_analisis.get("ela", {}).get("clusters", {}).get("localized", 0),
+                "overlap_texto": ela_analisis.get("ela", {}).get("texto", {}).get("overlap_text", False),
+                "overlap_digitos": ela_analisis.get("ela", {}).get("texto", {}).get("overlap_digits", False),
+                "peak_hits": ela_analisis.get("ela", {}).get("texto", {}).get("peak_hits", 0),
+                "ela_global_mean": ela_analisis.get("ela", {}).get("global", {}).get("mean", 0),
+                "ela_global_max": ela_analisis.get("ela", {}).get("global", {}).get("max", 0),
+                "suspicious_ratio": ela_analisis.get("ela", {}).get("suspicious_global_ratio", 0),
+                "interpretacion": "ELA focalizado detecta edición local en áreas con texto/números" if ela_analisis.get("ela", {}).get("marca_editada", False) else "ELA focalizado no detecta edición local significativa",
+                "posibles_causas": [
+                    "Edición de texto o números en la imagen",
+                    "Modificación de montos o fechas",
+                    "Pegado de elementos textuales",
+                    "Alteración de datos específicos",
+                    "Reemplazo de texto original"
+                ] if ela_analisis.get("ela", {}).get("marca_editada", False) else [
+                    "Imagen sin evidencia de edición textual",
+                    "Niveles de error consistentes",
+                    "Sin alteraciones en áreas de texto"
+                ],
+                "indicadores_clave": [
+                    f"Clústeres localizados: {ela_analisis.get('ela', {}).get('clusters', {}).get('localized', 0)}",
+                    f"Overlap con texto: {ela_analisis.get('ela', {}).get('texto', {}).get('overlap_text', False)}",
+                    f"Overlap con dígitos: {ela_analisis.get('ela', {}).get('texto', {}).get('overlap_digits', False)}",
+                    f"Peak hits: {ela_analisis.get('ela', {}).get('texto', {}).get('peak_hits', 0)}",
+                    f"ELA global mean: {ela_analisis.get('ela', {}).get('global', {}).get('mean', 0):.2f}",
+                    f"ELA global max: {ela_analisis.get('ela', {}).get('global', {}).get('max', 0):.2f}",
+                    f"Ratio sospechoso: {ela_analisis.get('ela', {}).get('suspicious_global_ratio', 0):.2%}"
+                ],
+                "recomendacion": "Examinar áreas de texto/números con alta actividad ELA - posible edición local" if ela_analisis.get("ela", {}).get("marca_editada", False) else "Imagen sin evidencia de edición textual en análisis ELA",
+                "criterios": ela_analisis.get("ela", {}).get("criterios", {}),
+                "analisis_detallado": {
+                    "grid": ela_analisis.get("ela", {}).get("grid", {}),
+                    "clusters": ela_analisis.get("ela", {}).get("clusters", {}),
+                    "texto": ela_analisis.get("ela", {}).get("texto", {}),
+                    "per_tile": ela_analisis.get("ela", {}).get("per_tile", {})
+                }
+            },
+            "penalizacion": penalizacion_ela
+        }
+
+        # Agregar a la categoría correspondiente
+        if es_prioritario:
+            prioritarias.append(ela_check)
+        elif es_secundario:
+            secundarias.append(ela_check)
+
+        # 2.5. Análisis de texto sintético aplanado (PRIORITARIO) - Misma lógica que detectar-texto-superpuesto-universal
+        from helpers.texto_sintetico_analisis import detectar_texto_sintetico_aplanado
+        from helpers.analisis_forense_profesional import detectar_texto_sintetico_aplanado as detectar_texto_sintetico_profesional
+
+        # Obtener texto OCR para cruzar con montos/fechas
+        texto_ocr = ""
+        if 'parser_avanzado' in campos_factura and campos_factura['parser_avanzado']:
+            parser_data = campos_factura['parser_avanzado']
+            if 'texto_extraido' in parser_data:
+                texto_ocr = parser_data['texto_extraido']
+
+        # Realizar análisis de texto sintético usando la misma lógica que detectar-texto-superpuesto-universal
+        try:
+            # Usar el análisis profesional que incluye detección de tipo de imagen
+            # Nota: imagen_bytes aquí es la imagen original, no la convertida a JPEG
+            texto_sint_analisis = detectar_texto_sintetico_profesional(imagen_bytes, analisis_forense)
+        except Exception as e:
+            print(f"Error en análisis profesional de texto sintético: {e}")
+            # Fallback al análisis básico
+            try:
+                texto_sint_analisis = detectar_texto_sintetico_aplanado(imagen_bytes, ocr_text=texto_ocr)
+            except Exception as e2:
+                print(f"Error en análisis básico de texto sintético: {e2}")
+                texto_sint_analisis = {
+                    "tiene_texto_sintetico": False,
+                    "nivel_sospecha": "BAJO",
+                    "swt_analisis": {"cajas_texto_detectadas": 0, "stroke_width_mean": 0, "stroke_width_std": 0, "stroke_width_uniforme": False},
+                    "color_antialias_analisis": {"color_trazo_promedio": 0, "color_casi_puro": False},
+                    "halo_analisis": {"halo_ratio_promedio": 0.0},
+                    "reguardado_analisis": {"lineas_totales": 0, "horiz_vert": 0, "densidad_lineas_10kpx": 0.0},
+                    "coincide_con_montos_fechas": False,
+                    "detalles_cajas": [],
+                    "tipo_imagen_analisis": {
+                        "es_screenshot": False,
+                        "resolucion_redonda": False,
+                        "tiene_muchas_lineas": False,
+                        "exif_vacio": False,
+                        "cajas_texto_detectadas": 0
+                    }
+                }
+
+        # Penalización basada en detección y coincidencia con montos/fechas - Misma lógica que detectar-texto-superpuesto-universal
+        penalizacion_texto_sint = 0
+        
+        # Lógica mejorada para detección de texto sintético usando la misma lógica que detectar-texto-superpuesto-universal
+        tiene_texto_sintetico = texto_sint_analisis.get("tiene_texto_sintetico", False)
+        nivel_sospecha = texto_sint_analisis.get("nivel_sospecha", "BAJO")
+        coincide_montos_fechas = texto_sint_analisis.get("coincide_con_montos_fechas", False)
+        
+        # Verificar tipo de imagen para ajustar la detección (misma lógica que detectar-texto-superpuesto-universal)
+        tipo_imagen = texto_sint_analisis.get("tipo_imagen_analisis", {})
+        es_screenshot = tipo_imagen.get("es_screenshot", False)
+        cajas_detectadas = tipo_imagen.get("cajas_texto_detectadas", 0)
+        resolucion_redonda = tipo_imagen.get("resolucion_redonda", False)
+        tiene_muchas_lineas = tipo_imagen.get("tiene_muchas_lineas", False)
+        exif_vacio = tipo_imagen.get("exif_vacio", False)
+        
+        # Ajustar la detección basada en el contexto (misma lógica que detectar-texto-superpuesto-universal)
+        if es_screenshot:
+            # Para screenshots, ser más conservador (misma lógica que detectar-texto-superpuesto-universal)
+            if tiene_texto_sintetico and coincide_montos_fechas:
+                penalizacion_texto_sint = 15  # Penalización reducida para screenshots
+            elif tiene_texto_sintetico:
+                penalizacion_texto_sint = 8   # Penalización muy reducida para screenshots
+        elif resolucion_redonda and tiene_muchas_lineas and exif_vacio and cajas_detectadas > 50:
+            # Para imágenes que parecen screenshots pero no se detectaron como tal
+            if tiene_texto_sintetico and coincide_montos_fechas:
+                penalizacion_texto_sint = 18  # Penalización intermedia
+            elif tiene_texto_sintetico:
+                penalizacion_texto_sint = 10  # Penalización reducida
+        else:
+            # Lógica normal para imágenes regulares
+            if tiene_texto_sintetico and coincide_montos_fechas:
+                penalizacion_texto_sint = 25  # Penalización alta si coincide con montos/fechas
+            elif tiene_texto_sintetico and nivel_sospecha == "ALTO":
+                penalizacion_texto_sint = 20  # Penalización media por texto sintético
+            elif tiene_texto_sintetico and nivel_sospecha == "MEDIO":
+                penalizacion_texto_sint = 12  # Penalización reducida para nivel medio
+            elif tiene_texto_sintetico:
+                penalizacion_texto_sint = 8   # Penalización mínima para nivel bajo
+        
+        score += penalizacion_texto_sint
+
+        # Crear el check de texto sintético (integrado con texto inyectado)
+        texto_inyectado_info = texto_sint_analisis.get("texto_inyectado")
+        via_deteccion = texto_sint_analisis.get("via_deteccion", "neutro")
+        
+        # Determinar la vía de detección para el reporte
+        if texto_inyectado_info and texto_inyectado_info.get("match"):
+            if texto_sint_analisis.get("tiene_texto_sintetico", False):
+                via_deteccion = "ambos"
+            else:
+                via_deteccion = "neutro"
+        elif texto_sint_analisis.get("tiene_texto_sintetico", False):
+            via_deteccion = "coloreado"
+        
+        texto_sint_check = {
+            "check": "Texto sintético aplanado",
+            "detalle": {
+                "detectado": texto_sint_analisis.get("tiene_texto_sintetico", False),
+                "nivel_sospecha": texto_sint_analisis.get("nivel_sospecha", "BAJO"),
+                "via_deteccion": via_deteccion,
+                "cajas_texto_detectadas": texto_sint_analisis.get("swt_analisis", {}).get("cajas_texto_detectadas", 0),
+                "metodo_deteccion": texto_sint_analisis.get("swt_analisis", {}).get("metodo_deteccion", "MSER+filtros"),
+                "stroke_width_mean": texto_sint_analisis.get("swt_analisis", {}).get("stroke_width_mean", 0.0),
+                "stroke_width_std": texto_sint_analisis.get("swt_analisis", {}).get("stroke_width_std", 0.0),
+                "stroke_width_uniforme": texto_sint_analisis.get("swt_analisis", {}).get("stroke_width_uniforme", False),
+                "cv_stroke_width": texto_sint_analisis.get("swt_analisis", {}).get("cv_stroke_width", 0.0),
+                "color_trazo_promedio": texto_sint_analisis.get("color_antialias_analisis", {}).get("color_trazo_promedio", 0.0),
+                "color_casi_puro": texto_sint_analisis.get("color_antialias_analisis", {}).get("color_casi_puro", False),
+                "ratio_cajas_puras": texto_sint_analisis.get("color_antialias_analisis", {}).get("ratio_cajas_puras", 0.0),
+                "halo_ratio_promedio": texto_sint_analisis.get("halo_analisis", {}).get("halo_ratio_promedio", 0.0),
+                "umbral_halo": texto_sint_analisis.get("halo_analisis", {}).get("umbral_halo", 0.45),
+                "lineas_totales": texto_sint_analisis.get("reguardado_analisis", {}).get("lineas_totales", 0),
+                "horiz_vert": texto_sint_analisis.get("reguardado_analisis", {}).get("horiz_vert", 0),
+                "densidad_lineas_10kpx": texto_sint_analisis.get("reguardado_analisis", {}).get("densidad_lineas_10kpx", 0.0),
+                "coincide_con_montos_fechas": texto_sint_analisis.get("coincide_con_montos_fechas", False),
+                # Información del tipo de imagen (misma lógica que detectar-texto-superpuesto-universal)
+                "tipo_imagen_analisis": {
+                    "es_screenshot": es_screenshot,
+                    "resolucion_redonda": resolucion_redonda,
+                    "tiene_muchas_lineas": tiene_muchas_lineas,
+                    "exif_vacio": exif_vacio,
+                    "cajas_texto_detectadas": cajas_detectadas
+                },
+                "interpretacion": "Texto sintético aplanado detectado - posible edición de texto" if texto_sint_analisis.get("tiene_texto_sintetico", False) else "Sin evidencia de texto sintético aplanado",
+                "posibles_causas": [
+                    "Edición de texto con herramientas de diseño",
+                    "Reemplazo de texto original",
+                    "Modificación de montos o fechas",
+                    "Pegado de texto desde otra fuente",
+                    "Renderizado sintético de texto"
+                ] if texto_sint_analisis.get("tiene_texto_sintetico", False) else [
+                    "Texto natural de la imagen",
+                    "Sin evidencia de edición textual",
+                    "Características de texto original preservadas"
+                ],
+                "indicadores_clave": [
+                    f"Cajas de texto: {texto_sint_analisis.get('swt_analisis', {}).get('cajas_texto_detectadas', 0)}",
+                    f"Grosor uniforme: {texto_sint_analisis.get('swt_analisis', {}).get('stroke_width_uniforme', False)}",
+                    f"CV grosor: {texto_sint_analisis.get('swt_analisis', {}).get('cv_stroke_width', 0.0):.3f}",
+                    f"Color casi puro: {texto_sint_analisis.get('color_antialias_analisis', {}).get('color_casi_puro', False)}",
+                    f"Ratio cajas puras: {texto_sint_analisis.get('color_antialias_analisis', {}).get('ratio_cajas_puras', 0.0):.2%}",
+                    f"Halo ratio: {texto_sint_analisis.get('halo_analisis', {}).get('halo_ratio_promedio', 0.0):.3f}",
+                    f"Coincide con montos/fechas: {texto_sint_analisis.get('coincide_con_montos_fechas', False)}",
+                    f"Vía detección: {via_deteccion}"
+                ],
+                "recomendacion": "Examinar áreas de texto con características sintéticas - posible edición" if texto_sint_analisis.get("tiene_texto_sintetico", False) else "Imagen sin evidencia de texto sintético aplanado",
+                "criterios": {
+                    "muchas_cajas": texto_sint_analisis.get("swt_analisis", {}).get("cajas_texto_detectadas", 0) >= 30,
+                    "trazo_uniforme": texto_sint_analisis.get("swt_analisis", {}).get("stroke_width_uniforme", False),
+                    "color_casi_puro": texto_sint_analisis.get("color_antialias_analisis", {}).get("color_casi_puro", False),
+                    "halo_alto": texto_sint_analisis.get("halo_analisis", {}).get("halo_ratio_promedio", 0.0) >= 0.45
+                },
+                "analisis_detallado": {
+                    "detalles_cajas": texto_sint_analisis.get("detalles_cajas", []),
+                    "swt_analisis": texto_sint_analisis.get("swt_analisis", {}),
+                    "color_antialias_analisis": texto_sint_analisis.get("color_antialias_analisis", {}),
+                    "halo_analisis": texto_sint_analisis.get("halo_analisis", {}),
+                    "reguardado_analisis": texto_sint_analisis.get("reguardado_analisis", {}),
+                    "texto_inyectado": texto_inyectado_info if texto_inyectado_info else None
+                }
+            },
+            "penalizacion": penalizacion_texto_sint
+        }
+
+        # Agregar a prioritarias (siempre es prioritario)
+        prioritarias.append(texto_sint_check)
+        
+        # 2.6. Regla compuesta PRIORITARIA: Texto aplanado + Ruido/Bordes
+        from helpers.decision_texto_aplanado_ruido import decision_texto_aplanado_ruido
+        
+        # Preparar datos de análisis forense para la regla compuesta
+        analisis_forense_compuesto = {
+            "analisis_forense_profesional": {
+                "texto_sintetico": {
+                    "tiene_texto_sintetico": texto_sint_analisis.get("tiene_texto_sintetico", False),
+                    "cajas_texto_detectadas": texto_sint_analisis.get("swt_analisis", {}).get("cajas_texto_detectadas", 0),
+                    "stroke_width_mean": texto_sint_analisis.get("swt_analisis", {}).get("stroke_width_mean", 0.0),
+                    "stroke_width_std": texto_sint_analisis.get("swt_analisis", {}).get("stroke_width_std", 0.0),
+                    "color_casi_puro": texto_sint_analisis.get("color_antialias_analisis", {}).get("color_casi_puro", False)
+                },
+                "ela_focalizado_analisis": {
+                    "ela_promedio_cajas": ela_analisis.get("ela", {}).get("suspicious_global_ratio", 0.0) * 100
+                }
+            },
+            "ruido_bordes": {
+                "halo_ratio": ruido_analisis.get("halo_ratio", 0.0),
+                "outlier_ratio": ruido_analisis.get("outlier_ratio", 0.0),
+                "edge_density": ruido_analisis.get("edge_density", 0.0)
+            },
+            "ela": {
+                "porcentaje_sospechoso": ela_analisis.get("ela", {}).get("suspicious_global_ratio", 0.0) * 100
+            }
+        }
+        
+        # Aplicar regla compuesta
+        try:
+            # Preparar contexto para reducir falsos positivos
+            contexto = {
+                "is_screenshot": False,  # TODO: detectar si es screenshot
+                "is_whatsapp_like": False,  # TODO: detectar si viene de WhatsApp
+                "dpi": 0,  # TODO: extraer DPI de metadatos
+                "ancho": 0,  # TODO: extraer dimensiones
+                "alto": 0
+            }
+            
+            comp = decision_texto_aplanado_ruido(
+                analisis_forense_compuesto, 
+                rois_montos_fechas=None,
+                policy="balanced",
+                contexto=contexto
+            )
+            
+            if comp["match_prioritario"]:
+                inc = 28
+                score += inc
+                prioritarias.append({
+                    "check": "Texto sintético aplanado + Ruido/Bordes",
+                    "detalle": {
+                        "nivel": comp["nivel"],
+                        "score_parcial": comp["score"],
+                        "razones": comp["razones"],
+                        "metricas": comp["metricas"],
+                        "umbrales": comp["umbrales"],
+                        "interpretacion": "Edición probable por texto aplanado (Paint u otros) - combinación de texto sintético y ruido/bordes localizados",
+                        "posibles_causas": [
+                            "Edición con Paint u otro software básico",
+                            "Aplanado y recompresión de texto añadido",
+                            "Modificación de montos o fechas con herramientas simples",
+                            "Pegado de texto desde otra fuente y aplanado"
+                        ],
+                        "indicadores_clave": [
+                            f"Texto sintético: {comp['metricas']['n_cajas']} cajas, CV={comp['metricas']['sw_cv']:.2f}",
+                            f"Ruido/bordes: halo={comp['metricas']['halo_ratio']:.2f}, outliers={comp['metricas']['outlier_ratio']:.2%}",
+                            f"Localización: {comp['metricas']['es_localizado']}, densidad={comp['metricas']['densidad_bordes_sospechosos']:.3f}",
+                            f"ELA: regional={comp['metricas']['ela_pct_reg']:.1f}%, global={comp['metricas']['ela_pct_global']:.1f}%"
+                        ],
+                        "flags": comp.get("flags", {}),
+                        "policy": comp.get("umbrales", {}).get("policy", "balanced"),
+                        "recomendacion": "Examinar áreas de texto con características sintéticas y patrones de ruido localizados - posible edición con herramientas básicas"
+                    },
+                    "penalizacion": inc
+                })
+            elif comp["score"] >= 45:
+                inc = 12
+                score += inc
+                secundarias.append({
+                    "check": "Indicadores combinados (no concluyente)",
+                    "detalle": {
+                        "nivel": comp["nivel"],
+                        "score_parcial": comp["score"],
+                        "razones": comp["razones"],
+                        "interpretacion": "Algunos indicadores de edición detectados pero no concluyentes",
+                        "recomendacion": "Revisar indicadores individuales para mayor detalle"
+                    },
+                    "penalizacion": inc
+                })
+        except Exception as e:
+            print(f"Error en regla compuesta texto aplanado + ruido: {e}")
+        
+        # 2.7. Análisis de overlays coloreados (PRIORITARIO) - Mejorado
+        from helpers.overlays_coloreados_analisis import detectar_overlays_coloreados
+        
+        # Obtener cajas de texto del análisis de texto sintético para reducir falsos positivos
+        text_boxes = []
+        if 'texto_sint_analisis' in locals() and texto_sint_analisis.get('cajas_texto'):
+            text_boxes = texto_sint_analisis['cajas_texto']
+        
+        # Convertir imagen_bytes a BGR para el análisis
+        try:
+            import cv2
+            import numpy as np
+            
+            # Decodificar imagen
+            img_array = np.frombuffer(imagen_bytes, np.uint8)
+            img_bgr = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+            
+            if img_bgr is not None:
+                overlays_analisis = detectar_overlays_coloreados(img_bgr, text_boxes=text_boxes)
+            else:
+                overlays_analisis = {
+                    "match": False,
+                    "score": 0,
+                    "color_ratio": 0.0,
+                    "num_componentes_coloreados": 0,
+                    "componentes_disparados": []
+                }
+        except Exception as e:
+            print(f"Error en análisis de overlays coloreados: {e}")
+            overlays_analisis = {
+                "match": False,
+                "score": 0,
+                "color_ratio": 0.0,
+                "num_componentes_coloreados": 0,
+                "componentes_disparados": []
+            }
+        
+        # Penalización basada en detección
+        penalizacion_overlays = 0
+        if overlays_analisis.get("match", False):
+            penalizacion_overlays = 25  # Penalización alta por overlays coloreados
+            score += penalizacion_overlays
+        
+        # Crear el check de overlays coloreados
+        overlays_check = {
+            "check": "Overlays coloreados (strokes/garabatos)",
+            "detalle": {
+                "detectado": overlays_analisis.get("match", False),
+                "score_parcial": overlays_analisis.get("score", 0),
+                "color_ratio": overlays_analisis.get("color_ratio", 0.0),
+                "num_componentes_coloreados": overlays_analisis.get("num_componentes_coloreados", 0),
+                "componentes_disparados": overlays_analisis.get("componentes_disparados", []),
+                "interpretacion": "Overlays coloreados detectados - posible edición con Paint u otras herramientas" if overlays_analisis.get("match", False) else "Sin evidencia de overlays coloreados",
+                "posibles_causas": [
+                    "Garabatos o anotaciones con Paint",
+                    "Figuras o líneas coloreadas añadidas",
+                    "Marcas o resaltados en color",
+                    "Elementos gráficos superpuestos",
+                    "Edición con herramientas de dibujo"
+                ] if overlays_analisis.get("match", False) else [
+                    "Documento sin overlays coloreados",
+                    "Sin evidencia de edición con herramientas de dibujo",
+                    "Colores consistentes con documento original"
+                ],
+                "indicadores_clave": [
+                    f"Score: {overlays_analisis.get('score', 0)}/100",
+                    f"Ratio de color: {overlays_analisis.get('color_ratio', 0.0):.2%}",
+                    f"Componentes coloreados: {overlays_analisis.get('num_componentes_coloreados', 0)}",
+                    f"Componentes disparados: {len(overlays_analisis.get('componentes_disparados', []))}"
+                ],
+                "recomendacion": "Examinar áreas con elementos coloreados - posible edición con herramientas de dibujo" if overlays_analisis.get("match", False) else "Imagen sin evidencia de overlays coloreados",
+                "criterios": {
+                    "croma_alto": "Croma alto en Lab o saturación HSV alta",
+                    "forma_trazo": "Blobs elongados con ancho casi constante",
+                    "interseccion_texto": "Intersección con texto/bordes refuerza",
+                    "color_ratio_ok": overlays_analisis.get("color_ratio", 0.0) <= 0.02
+                },
+                "analisis_detallado": {
+                    "componentes_disparados": overlays_analisis.get("componentes_disparados", []),
+                    "metodologia": "Detección de croma alto en Lab/HSV + análisis de forma de trazo + intersección con texto"
+                }
+            },
+            "penalizacion": penalizacion_overlays
+        }
+        
+        # Agregar a prioritarias (siempre es prioritario cuando se detecta)
+        if overlays_analisis.get("match", False):
+            prioritarias.append(overlays_check)
+        
         # 3. Verificar si hay texto extraído
         if not texto_extraido or len(texto_extraido.strip()) < 50:
             score += 30
@@ -373,54 +1000,7 @@ def _evaluar_riesgo_imagen(imagen_bytes: bytes, texto_extraido: str, campos_fact
                 "penalizacion": 30
             })
         
-        # 4. Verificar campos críticos
-        campos_criticos = ["ruc", "razonSocial", "fechaEmision", "importeTotal"]
-        campos_faltantes = [campo for campo in campos_criticos if not campos_factura.get(campo)]
-        campos_encontrados = [campo for campo in campos_criticos if campos_factura.get(campo)]
-        
-        if campos_faltantes:
-            score += len(campos_faltantes) * 10
-            prioritarias.append({
-                "check": "Campos críticos de factura",
-                "detalle": {
-                    "campos_faltantes": campos_faltantes,
-                    "campos_encontrados": campos_encontrados,
-                    "total_campos": len(campos_criticos),
-                    "porcentaje_completitud": f"{(len(campos_encontrados)/len(campos_criticos))*100:.1f}%",
-                    "campos_detalle": {
-                        "ruc": {
-                            "encontrado": "ruc" in campos_encontrados,
-                            "valor": campos_factura.get("ruc"),
-                            "patron_buscado": r"RUC[:\s]*(\d{13})"
-                        },
-                        "razonSocial": {
-                            "encontrado": "razonSocial" in campos_encontrados,
-                            "valor": campos_factura.get("razonSocial"),
-                            "patron_buscado": r"Razón Social[:\s]*([^\n]+)"
-                        },
-                        "fechaEmision": {
-                            "encontrado": "fechaEmision" in campos_encontrados,
-                            "valor": campos_factura.get("fechaEmision"),
-                            "patron_buscado": r"Fecha[:\s]*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})"
-                        },
-                        "importeTotal": {
-                            "encontrado": "importeTotal" in campos_encontrados,
-                            "valor": campos_factura.get("importeTotal"),
-                            "patron_buscado": r"Total[:\s]*\$?(\d+[.,]\d{2})"
-                        }
-                    },
-                    "posibles_causas": [
-                        "Texto no reconocido por OCR",
-                        "Formato de factura no estándar",
-                        "Campos en ubicaciones inusuales",
-                        "Calidad de imagen insuficiente"
-                    ],
-                    "recomendacion": "Verificar formato de factura y calidad de imagen"
-                },
-                "penalizacion": len(campos_faltantes) * 10
-            })
-        
-        # 5. Verificar clave de acceso
+        # 4. Verificar clave de acceso
         if not campos_factura.get("claveAcceso"):
             score += 20
             prioritarias.append({
@@ -447,7 +1027,7 @@ def _evaluar_riesgo_imagen(imagen_bytes: bytes, texto_extraido: str, campos_fact
                 "penalizacion": 20
             })
         
-        # 6. Análisis forense - Doble compresión (SECUNDARIA)
+        # 5. Análisis forense - Doble compresión (SECUNDARIA)
         analisis_forense_detalle = analisis_forense.get("analisis_forense", {})
         doble_compresion = analisis_forense_detalle.get("doble_compresion", {})
         if doble_compresion.get("tiene_doble_compresion", False):
@@ -475,7 +1055,7 @@ def _evaluar_riesgo_imagen(imagen_bytes: bytes, texto_extraido: str, campos_fact
                 "penalizacion": 15
             })
         
-        # 7. Análisis forense - ELA (SECUNDARIA)
+        # 6. Análisis forense - ELA (SECUNDARIA)
         ela = analisis_forense_detalle.get("ela", {})
         if ela.get("tiene_ediciones", False):
             score += 12
@@ -502,40 +1082,8 @@ def _evaluar_riesgo_imagen(imagen_bytes: bytes, texto_extraido: str, campos_fact
                 "penalizacion": 12
             })
         
-        # 8. Análisis forense - Ruido y bordes (SECUNDARIA)
-        ruido_bordes = analisis_forense_detalle.get("ruido_bordes", {})
-        if ruido_bordes.get("tiene_edicion_local", False):
-            score += 18
-            secundarias.append({
-                "check": "Inconsistencias en ruido y bordes",
-                "detalle": {
-                    "detectado": True,
-                    "nivel_sospecha": ruido_bordes.get("nivel_sospecha", "N/A"),
-                    "laplacian_variance": ruido_bordes.get("laplacian_variance", 0),
-                    "edge_density": ruido_bordes.get("edge_density", 0),
-                    "num_lines": ruido_bordes.get("num_lines", 0),
-                    "parallel_lines": ruido_bordes.get("parallel_lines", 0),
-                    "outlier_ratio": ruido_bordes.get("outlier_ratio", 0),
-                    "gradient_peaks": ruido_bordes.get("gradient_peaks", 0),
-                    "peak_ratio": ruido_bordes.get("peak_ratio", 0),
-                    "interpretacion": "Análisis de ruido y bordes detecta inconsistencias en patrones locales",
-                    "posibles_causas": [
-                        "Edición local con herramientas de clonado",
-                        "Pegado de elementos con diferentes niveles de ruido",
-                        "Aplicación de filtros selectivos",
-                        "Modificación de áreas específicas"
-                    ],
-                    "indicadores_clave": [
-                        f"Ratio de outliers: {ruido_bordes.get('outlier_ratio', 0):.2%}",
-                        f"Densidad de bordes: {ruido_bordes.get('edge_density', 0):.2%}",
-                        f"Líneas paralelas: {ruido_bordes.get('parallel_lines', 0)}"
-                    ],
-                    "recomendacion": "Examinar áreas con patrones de ruido inconsistentes"
-                },
-                "penalizacion": 18
-            })
         
-        # 9. Análisis forense - pHash (SECUNDARIA)
+        # 7. Análisis forense - pHash (SECUNDARIA)
         phash = analisis_forense_detalle.get("phash_bloques", {})
         if phash.get("tiene_diferencias_locales", False):
             score += 10
@@ -804,41 +1352,134 @@ def _evaluar_riesgo_imagen(imagen_bytes: bytes, texto_extraido: str, campos_fact
                 "penalizacion": 30
             })
         
-        # 17. Evidencias forenses de manipulación (check general) - SECUNDARIA
-        grado_confianza = analisis_forense.get("analisis_forense", {}).get("grado_confianza", {})
-        tiene_evidencias_forenses = grado_confianza.get("grado_confianza") in ["BAJO", "MEDIO"]
+        # 17. Validaciones financieras avanzadas (PRIORITARIO)
+        financial_checks = campos_factura.get("financial_checks", {})
+        if financial_checks:
+            # Check: Suma de ítems vs subtotal sin impuestos
+            items_vs_subtotal = financial_checks.get("items_vs_subtotal_sin_impuestos")
+            if items_vs_subtotal is False:
+                score += 25
+                prioritarias.append({
+                    "check": "Inconsistencia financiera: ítems vs subtotal",
+                    "detalle": {
+                        "detectado": True,
+                        "suma_items": financial_checks.get("sum_items"),
+                        "subtotal_sin_impuestos": campos_factura.get("totals", {}).get("subtotal_sin_impuestos"),
+                        "diferencia": abs((financial_checks.get("sum_items") or 0) - (campos_factura.get("totals", {}).get("subtotal_sin_impuestos") or 0)),
+                        "interpretacion": "La suma de ítems no coincide con el subtotal sin impuestos",
+                        "posibles_causas": [
+                            "Manipulación de totales en la factura",
+                            "Error en cálculo de subtotales",
+                            "Edición posterior de montos",
+                            "Factura generada incorrectamente"
+                        ],
+                        "indicadores_clave": [
+                            f"Suma ítems: ${financial_checks.get('sum_items', 0):.2f}",
+                            f"Subtotal: ${campos_factura.get('totals', {}).get('subtotal_sin_impuestos', 0):.2f}",
+                            f"Diferencia: ${abs((financial_checks.get('sum_items') or 0) - (campos_factura.get('totals', {}).get('subtotal_sin_impuestos') or 0)):.2f}"
+                        ],
+                        "recomendacion": "Verificar cálculos matemáticos de la factura"
+                    },
+                    "penalizacion": 25
+                })
+            
+            # Check: Total recompuesto vs total declarado
+            recomputed_vs_total = financial_checks.get("recomputed_total_vs_total")
+            if recomputed_vs_total is False:
+                score += 30
+                prioritarias.append({
+                    "check": "Inconsistencia financiera: total recompuesto vs declarado",
+                    "detalle": {
+                        "detectado": True,
+                        "total_recompuesto": financial_checks.get("recomputed_total"),
+                        "total_declarado": campos_factura.get("importeTotal"),
+                        "diferencia": abs((financial_checks.get("recomputed_total") or 0) - (campos_factura.get("importeTotal") or 0)),
+                        "interpretacion": "El total calculado no coincide con el total declarado",
+                        "posibles_causas": [
+                            "Manipulación del total de la factura",
+                            "Error en aplicación de impuestos",
+                            "Descuentos no aplicados correctamente",
+                            "Edición posterior de totales"
+                        ],
+                        "indicadores_clave": [
+                            f"Total recompuesto: ${financial_checks.get('recomputed_total', 0):.2f}",
+                            f"Total declarado: ${campos_factura.get('importeTotal', 0):.2f}",
+                            f"Diferencia: ${abs((financial_checks.get('recomputed_total') or 0) - (campos_factura.get('importeTotal') or 0)):.2f}"
+                        ],
+                        "recomendacion": "Verificar cálculos de impuestos y totales"
+                    },
+                    "penalizacion": 30
+                })
+
+        # 17. Análisis de doble compresión JPEG (SECUNDARIO)
+        from helpers.doble_compresion_analisis import detectar_doble_compresion
         
-        if tiene_evidencias_forenses:
-            score += 15
-            secundarias.append({
-                "check": "Evidencias forenses de manipulación",
-                "detalle": {
-                    "detectado": True,
-                    "grado_confianza": grado_confianza.get("grado_confianza", "N/A"),
-                    "porcentaje_confianza": grado_confianza.get("porcentaje_confianza", 0),
-                    "puntuacion": grado_confianza.get("puntuacion", 0),
-                    "max_puntuacion": grado_confianza.get("max_puntuacion", 12),
-                    "evidencias": grado_confianza.get("evidencias", []),
-                    "justificacion": grado_confianza.get("justificacion", ""),
-                    "recomendacion": grado_confianza.get("recomendacion", ""),
-                    "interpretacion": "Análisis forense general detecta indicadores de manipulación",
-                    "posibles_causas": [
-                        "Múltiples indicadores de edición detectados",
-                        "Inconsistencias en análisis técnicos",
-                        "Patrones anómalos en la imagen",
-                        "Evidencias de procesamiento no estándar"
-                    ],
-                    "metodologia": "Evaluación integral de múltiples técnicas forenses",
-                    "indicadores_clave": [
-                        f"Grado de confianza: {grado_confianza.get('grado_confianza', 'N/A')}",
-                        f"Porcentaje: {grado_confianza.get('porcentaje_confianza', 0):.1f}%",
-                        f"Puntuación: {grado_confianza.get('puntuacion', 0)}/{grado_confianza.get('max_puntuacion', 12)}",
-                        f"Evidencias: {len(grado_confianza.get('evidencias', []))}"
-                    ],
-                    "recomendacion": "Revisar todas las evidencias forenses detectadas"
-                },
-                "penalizacion": 15
-            })
+        # Realizar análisis de doble compresión
+        try:
+            doble_comp_analisis = detectar_doble_compresion(imagen_bytes)
+        except Exception as e:
+            print(f"Error en análisis de doble compresión: {e}")
+            doble_comp_analisis = {
+                "tiene_doble_compresion": False,
+                "periodicidad_detectada": False,
+                "confianza": "BAJA",
+                "num_peaks": 0,
+                "consistencia_componentes": 0.0,
+                "ac_variance": 0.0,
+                "dc_variance": 0.0
+            }
+        
+        # Solo penalizar si hay doble compresión con confianza ALTA
+        penalizacion_doble_comp = 0
+        if (doble_comp_analisis.get("tiene_doble_compresion", False) and 
+            doble_comp_analisis.get("confianza") == "ALTA" and 
+            doble_comp_analisis.get("periodicidad_detectada", False)):
+            penalizacion_doble_comp = 8  # Penalización baja por doble compresión
+            score += penalizacion_doble_comp
+        
+        secundarias.append({
+            "check": "Doble compresión JPEG",
+            "detalle": {
+                "detectado": doble_comp_analisis.get("tiene_doble_compresion", False),
+                "periodicidad_detectada": doble_comp_analisis.get("periodicidad_detectada", False),
+                "confianza": doble_comp_analisis.get("confianza", "BAJA"),
+                "num_peaks": doble_comp_analisis.get("num_peaks", 0),
+                "consistencia_componentes": doble_comp_analisis.get("consistencia_componentes", 0.0),
+                "ac_variance": doble_comp_analisis.get("ac_variance", 0.0),
+                "dc_variance": doble_comp_analisis.get("dc_variance", 0.0),
+                "is_jpeg": doble_comp_analisis.get("info_jpeg", {}).get("is_jpeg", False),
+                "qtables_disponibles": doble_comp_analisis.get("info_jpeg", {}).get("qtables_disponibles", False),
+                "interpretacion": "Doble compresión JPEG detectada - posible recompresión" if doble_comp_analisis.get("tiene_doble_compresion", False) else "Sin evidencia de doble compresión JPEG",
+                "posibles_causas": [
+                    "Recompresión de imagen JPEG",
+                    "Edición y re-guardado en formato JPEG",
+                    "Procesamiento por aplicaciones de mensajería",
+                    "Capturas de pantalla de imágenes JPEG",
+                    "Exportación desde software de edición"
+                ] if doble_comp_analisis.get("tiene_doble_compresion", False) else [
+                    "Imagen sin evidencia de doble compresión",
+                    "Compresión JPEG única",
+                    "Formato original preservado"
+                ],
+                "indicadores_clave": [
+                    f"Confianza: {doble_comp_analisis.get('confianza', 'BAJA')}",
+                    f"Periodicidad: {doble_comp_analisis.get('periodicidad_detectada', False)}",
+                    f"Número de picos: {doble_comp_analisis.get('num_peaks', 0)}",
+                    f"Consistencia: {doble_comp_analisis.get('consistencia_componentes', 0.0):.2%}",
+                    f"Varianza AC: {doble_comp_analisis.get('ac_variance', 0.0):.2f}",
+                    f"Varianza DC: {doble_comp_analisis.get('dc_variance', 0.0):.2f}",
+                    f"Es JPEG: {doble_comp_analisis.get('info_jpeg', {}).get('is_jpeg', False)}"
+                ],
+                "recomendacion": "Considerar doble compresión como señal de apoyo - no es prueba única de edición" if doble_comp_analisis.get("tiene_doble_compresion", False) else "Imagen sin evidencia de doble compresión JPEG",
+                "nota_importante": "WhatsApp, capturas y exportaciones generan doble compresión sin edición",
+                "analisis_detallado": {
+                    "detalles_componentes": doble_comp_analisis.get("detalles_componentes", []),
+                    "info_jpeg": doble_comp_analisis.get("info_jpeg", {}),
+                    "nota": doble_comp_analisis.get("nota", "")
+                }
+            },
+            "penalizacion": penalizacion_doble_comp
+        })
         
         # Determinar nivel de riesgo
         if score >= 80:
@@ -900,36 +1541,140 @@ async def validar_imagen(req: PeticionImagen):
     tipo_archivo = tipo_info["tipo"]
     log_step("2) detectar tipo imagen", t0)
 
-    # 3) Extraer texto con OCR
+    # 3) Parser avanzado de facturas SRI
     t0 = time.perf_counter()
-    texto_extraido = _extraer_texto_imagen(archivo_bytes)
-    log_step("3) extraer texto OCR", t0)
+    try:
+        parse_result = parse_capture_from_bytes(archivo_bytes, f"capture.{tipo_archivo.lower()}")
+        texto_extraido = parse_result.ocr_text
+        campos_factura_avanzados = {
+            "ruc": parse_result.metadata.ruc,
+            "razonSocial": parse_result.metadata.buyer_name,
+            "fechaEmision": parse_result.metadata.issue_datetime,
+            "importeTotal": parse_result.totals.total,
+            "claveAcceso": parse_result.metadata.access_key,
+            "detalles": [{
+                "cantidad": item.qty or 0,
+                "descripcion": item.description or "",
+                "precioTotal": item.line_total or 0
+            } for item in parse_result.items],
+            "totals": {
+                "subtotal15": parse_result.totals.subtotal15,
+                "subtotal0": parse_result.totals.subtotal0,
+                "subtotal_no_objeto": parse_result.totals.subtotal_no_objeto,
+                "subtotal_sin_impuestos": parse_result.totals.subtotal_sin_impuestos,
+                "descuento": parse_result.totals.descuento,
+                "iva15": parse_result.totals.iva15,
+                "total": parse_result.totals.total
+            },
+            "barcodes": parse_result.barcodes,
+            "financial_checks": parse_result.checks,
+            "metadata": {
+                "invoice_number": parse_result.metadata.invoice_number,
+                "authorization": parse_result.metadata.authorization,
+                "environment": parse_result.metadata.environment,
+                "buyer_id": parse_result.metadata.buyer_id,
+                "emitter_name": parse_result.metadata.emitter_name,
+                "file_metadata": {
+                    "sha256": parse_result.metadata.sha256,
+                    "width": parse_result.metadata.width,
+                    "height": parse_result.metadata.height,
+                    "dpi": parse_result.metadata.dpi,
+                    "mode": parse_result.metadata.mode,
+                    "format": parse_result.metadata.format
+                }
+            }
+        }
+        log_step("3) parser avanzado facturas SRI", t0)
+    except Exception as e:
+        print(f"❌ Error en parser avanzado: {e}")
+        print(f"   Tipo de error: {type(e).__name__}")
+        import traceback
+        print(f"   Traceback: {traceback.format_exc()}")
+        # Fallback al método anterior
+        texto_extraido = _extraer_texto_imagen(archivo_bytes)
+        campos_factura_avanzados = _extraer_campos_factura_imagen(texto_extraido)
+        log_step("3) fallback extracción básica", t0)
 
-    # 4) Extraer campos de factura
-    t0 = time.perf_counter()
-    campos_factura = _extraer_campos_factura_imagen(texto_extraido)
-    log_step("4) extraer campos factura", t0)
+    # 4) Usar campos avanzados como campos_factura
+    campos_factura = campos_factura_avanzados
 
     # 5) Análisis forense completo
     t0 = time.perf_counter()
     try:
-        analisis_forense = analizar_imagen_completa(req.imagen_base64)
+        # Convertir imagen a JPEG si no es JPEG/JPG para análisis forense
+        imagen_bytes_jpeg = archivo_bytes
+        # Detectar tipo de archivo para conversión
+        tipo_info = detectar_tipo_archivo(req.imagen_base64)
+        tipo_archivo = tipo_info.get("tipo", "UNKNOWN").upper()
+        if not tipo_archivo in ["JPEG", "JPG"]:
+            try:
+                from PIL import Image
+                import io
+                
+                # Abrir imagen original
+                img_original = Image.open(io.BytesIO(archivo_bytes))
+                
+                # Convertir a RGB si es necesario
+                if img_original.mode not in ("RGB", "L"):
+                    img_original = img_original.convert("RGB")
+                
+                # Convertir a JPEG con calidad 95
+                jpeg_buffer = io.BytesIO()
+                img_original.save(jpeg_buffer, format="JPEG", quality=95, optimize=True)
+                imagen_bytes_jpeg = jpeg_buffer.getvalue()
+                
+                # Convertir a base64 para el análisis
+                imagen_base64_jpeg = base64.b64encode(imagen_bytes_jpeg).decode('utf-8')
+                
+                print(f"Imagen convertida a JPEG para análisis forense. Tamaño original: {len(archivo_bytes)} bytes, JPEG: {len(imagen_bytes_jpeg)} bytes")
+                
+            except Exception as e:
+                print(f"Error convirtiendo imagen a JPEG: {e}")
+                # Usar imagen original si falla la conversión
+                imagen_base64_jpeg = req.imagen_base64
+        else:
+            imagen_base64_jpeg = req.imagen_base64
+        
+        # Análisis forense básico
+        analisis_forense = analizar_imagen_completa(imagen_base64_jpeg)
+        
+        # Análisis forense avanzado (nuevo)
+        try:
+            # Guardar imagen JPEG convertida temporalmente para análisis avanzado
+            import tempfile
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as temp_file:
+                temp_file.write(imagen_bytes_jpeg)
+                temp_path = temp_file.name
+            
+            analisis_forense_avanzado = analizar_forensics_avanzado(temp_path)
+            
+            # Integrar análisis avanzado en el resultado
+            analisis_forense["forensics_avanzado"] = analisis_forense_avanzado
+            
+            # Limpiar archivo temporal
+            os.unlink(temp_path)
+            
+        except Exception as e_avanzado:
+            print(f"Error en análisis forense avanzado: {e_avanzado}")
+            analisis_forense["forensics_avanzado"] = {
+                "disponible": False,
+                "error": str(e_avanzado)
+            }
+        
         log_step("5) análisis forense completo", t0)
     except Exception as e:
         print(f"Error en análisis forense: {e}")
         analisis_forense = {
             "error": f"Error en análisis forense: {str(e)}",
             "probabilidad_manipulacion": 0.5,
-            "nivel_riesgo": "MEDIO"
+            "nivel_riesgo": "MEDIO",
+            "forensics_avanzado": {
+                "disponible": False,
+                "error": "Análisis forense básico falló"
+            }
         }
 
-    # 6) Evaluación de riesgo
-    t0 = time.perf_counter()
-    riesgo = _evaluar_riesgo_imagen(archivo_bytes, texto_extraido, campos_factura, analisis_forense)
-    log_step("6) evaluación de riesgo", t0)
-
-
-    # 8) Preparar validación de firmas (siempre falsa para imágenes)
+    # 6) Preparar validación de firmas (siempre falsa para imágenes)
     validacion_firmas = {
         "resumen": {"total_firmas": 0, "firmas_validas": 0, "firmas_invalidas": 0, "con_certificados": 0, "con_timestamps": 0, "con_politicas": 0, "porcentaje_validas": 0},
         "dependencias": {"asn1crypto": False, "oscrypto": False, "certvalidator": False},
@@ -939,14 +1684,27 @@ async def validar_imagen(req: PeticionImagen):
         "firma_detectada": False
     }
 
+    # 7) Integrar validación SRI en los datos de la factura
+    factura_con_sri = integrar_validacion_sri(campos_factura)
+    
+    # 8) Evaluación de riesgo (después de la validación SRI)
+    t0 = time.perf_counter()
+    riesgo = _evaluar_riesgo_imagen(archivo_bytes, texto_extraido, factura_con_sri, analisis_forense)
+    log_step("8) evaluación de riesgo", t0)
+
+
     # 9) Preparar respuesta final
     log_step("TOTAL", t_all)
+    
+    # Usar el resultado de la validación SRI para el mensaje principal
+    sri_verificado = factura_con_sri.get("sri_verificado", False)
+    mensaje_sri = factura_con_sri.get("mensaje", f"Análisis forense de imagen {tipo_archivo} completado.")
     
     return JSONResponse(
         status_code=200,
         content=safe_serialize_dict({
-            "sri_verificado": False,
-            "mensaje": f"Análisis forense de imagen {tipo_archivo} completado. No se puede validar con SRI (solo PDFs).",
+            "sri_verificado": sri_verificado,
+            "mensaje": mensaje_sri,
             "tipo_archivo": tipo_archivo,
             "coincidencia": "no",  # Las imágenes no se pueden comparar con SRI
             "diferencias": {},
@@ -957,10 +1715,18 @@ async def validar_imagen(req: PeticionImagen):
                 "total_sri_items": 0,
                 "total_imagen_items": sum(d.get("precioTotal", 0) for d in campos_factura.get("detalles", []))
             },
-            "factura": campos_factura,
+            "factura": factura_con_sri,
+            "clave_acceso_parseada": parse_result.access_key_parsed if 'parse_result' in locals() else None,
             "riesgo": riesgo,
             "validacion_firmas": validacion_firmas,
             "analisis_detallado": analisis_forense,
-            "texto_extraido": texto_extraido[:1000] + "..." if len(texto_extraido) > 1000 else texto_extraido
+            "texto_extraido": texto_extraido[:1000] + "..." if len(texto_extraido) > 1000 else texto_extraido,
+            "parser_avanzado": {
+                "disponible": "financial_checks" in campos_factura,
+                "barcodes_detectados": len(campos_factura.get("barcodes", [])),
+                "items_detectados": len(campos_factura.get("detalles", [])),
+                "validaciones_financieras": campos_factura.get("financial_checks", {}),
+                "metadatos_avanzados": campos_factura.get("metadata", {})
+            }
         })
     )

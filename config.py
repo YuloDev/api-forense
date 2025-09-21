@@ -54,6 +54,8 @@ else:
         "texto_superpuesto": 25,
         "capas_ocultas": 20,
         "evidencias_forenses": 15,
+        "inconsistencia_financiera_items_subtotal": 25,
+        "inconsistencia_financiera_total_recompuesto": 30,
     }
 
 # Cargar descripciones de RISK_WEIGHTS
