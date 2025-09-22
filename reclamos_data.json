@@ -5055,10 +5055,378 @@
         "ver": true,
         "subir": true
       }
+    },
+    {
+      "id_reclamo": "CLM-000-317",
+      "fecha_envio": "22/09/2025",
+      "proveedor": {
+        "nombre": "JIMENEZ BENAVIDES ONAUR JUMANDY ",
+        "tipo_servicio": "Consulta Médica"
+      },
+      "estado": "En Revisión",
+      "monto_solicitado": 1500.0,
+      "monto_aprobado": null,
+      "moneda": "$",
+      "acciones": {
+        "ver": true,
+        "subir": true
+      }
+    },
+    {
+      "id_reclamo": "CLM-000-318",
+      "fecha_envio": "22/09/2025",
+      "proveedor": {
+        "nombre": "JIMENEZ BENAVIDES ONAUR JUMANDY ",
+        "tipo_servicio": "Consulta Médica"
+      },
+      "estado": "En Revisión",
+      "monto_solicitado": 1500.0,
+      "monto_aprobado": null,
+      "moneda": "$",
+      "acciones": {
+        "ver": true,
+        "subir": true
+      }
+    },
+    {
+      "id_reclamo": "CLM-000-319",
+      "fecha_envio": "22/09/2025",
+      "proveedor": {
+        "nombre": "JIMENEZ BENAVIDES ONAUR JUMANDY ",
+        "tipo_servicio": "Consulta Médica"
+      },
+      "estado": "En Revisión",
+      "monto_solicitado": 1500.0,
+      "monto_aprobado": null,
+      "moneda": "$",
+      "acciones": {
+        "ver": true,
+        "subir": true
+      }
+    },
+    {
+      "id_reclamo": "CLM-000-320",
+      "fecha_envio": "22/09/2025",
+      "proveedor": {
+        "nombre": "JIMENEZ BENAVIDES ONAUR JUMANDY ",
+        "tipo_servicio": "Consulta Médica"
+      },
+      "estado": "En Revisión",
+      "monto_solicitado": 1500.0,
+      "monto_aprobado": null,
+      "moneda": "$",
+      "acciones": {
+        "ver": true,
+        "subir": true
+      }
+    },
+    {
+      "id_reclamo": "CLM-000-321",
+      "fecha_envio": "22/09/2025",
+      "proveedor": {
+        "nombre": "JIMENEZ BENAVIDES ONAUR JUMANDY ",
+        "tipo_servicio": "Consulta Médica"
+      },
+      "estado": "En Revisión",
+      "monto_solicitado": 1500.0,
+      "monto_aprobado": null,
+      "moneda": "$",
+      "acciones": {
+        "ver": true,
+        "subir": true
+      }
+    },
+    {
+      "id_reclamo": "CLM-000-322",
+      "fecha_envio": "22/09/2025",
+      "proveedor": {
+        "nombre": "JIMENEZ BENAVIDES ONAUR JUMANDY ",
+        "tipo_servicio": "Consulta Médica"
+      },
+      "estado": "Aprobado",
+      "monto_solicitado": 1500.0,
+      "monto_aprobado": null,
+      "moneda": "$",
+      "acciones": {
+        "ver": true,
+        "subir": false
+      }
+    },
+    {
+      "id_reclamo": "CLM-000-323",
+      "fecha_envio": "22/09/2025",
+      "proveedor": {
+        "nombre": "JIMENEZ BENAVIDES ONAUR JUMANDY ",
+        "tipo_servicio": "Consulta Médica"
+      },
+      "estado": "Rechazado",
+      "monto_solicitado": 1500.0,
+      "monto_aprobado": null,
+      "moneda": "$",
+      "acciones": {
+        "ver": true,
+        "subir": true
+      }
+    },
+    {
+      "id_reclamo": "CLM-000-324",
+      "fecha_envio": "22/09/2025",
+      "proveedor": {
+        "nombre": "JIMENEZ BENAVIDES ONAUR JUMANDY ",
+        "tipo_servicio": "Consulta Médica"
+      },
+      "estado": "Rechazado",
+      "monto_solicitado": 1500.0,
+      "monto_aprobado": null,
+      "moneda": "$",
+      "acciones": {
+        "ver": true,
+        "subir": true
+      }
+    },
+    {
+      "id_reclamo": "CLM-000-325",
+      "fecha_envio": "22/09/2025",
+      "proveedor": {
+        "nombre": "JIMENEZ BENAVIDES ONAUR JUMANDY ",
+        "tipo_servicio": "Consulta Médica"
+      },
+      "estado": "Rechazado",
+      "monto_solicitado": 1500.0,
+      "monto_aprobado": null,
+      "moneda": "$",
+      "acciones": {
+        "ver": true,
+        "subir": true
+      }
+    },
+    {
+      "id_reclamo": "CLM-000-326",
+      "fecha_envio": "22/09/2025",
+      "proveedor": {
+        "nombre": "JIMENEZ BENAVIDES ONAUR JUMANDY ",
+        "tipo_servicio": "Consulta Médica"
+      },
+      "estado": "Rechazado",
+      "monto_solicitado": 1500.0,
+      "monto_aprobado": null,
+      "moneda": "$",
+      "acciones": {
+        "ver": true,
+        "subir": true
+      }
+    },
+    {
+      "id_reclamo": "CLM-000-327",
+      "fecha_envio": "22/09/2025",
+      "proveedor": {
+        "nombre": "JIMENEZ BENAVIDES ONAUR JUMANDY ",
+        "tipo_servicio": "Consulta Médica"
+      },
+      "estado": "Rechazado",
+      "monto_solicitado": 1500.0,
+      "monto_aprobado": null,
+      "moneda": "$",
+      "acciones": {
+        "ver": true,
+        "subir": true
+      }
+    },
+    {
+      "id_reclamo": "CLM-000-328",
+      "fecha_envio": "22/09/2025",
+      "proveedor": {
+        "nombre": "JIMENEZ BENAVIDES ONAUR JUMANDY ",
+        "tipo_servicio": "Consulta Médica"
+      },
+      "estado": "Rechazado",
+      "monto_solicitado": 1500.0,
+      "monto_aprobado": null,
+      "moneda": "$",
+      "acciones": {
+        "ver": true,
+        "subir": true
+      }
+    },
+    {
+      "id_reclamo": "CLM-000-329",
+      "fecha_envio": "22/09/2025",
+      "proveedor": {
+        "nombre": "JIMENEZ BENAVIDES ONAUR JUMANDY ",
+        "tipo_servicio": "Consulta Médica"
+      },
+      "estado": "En Revisión",
+      "monto_solicitado": 1500.0,
+      "monto_aprobado": null,
+      "moneda": "$",
+      "acciones": {
+        "ver": true,
+        "subir": true
+      }
+    },
+    {
+      "id_reclamo": "CLM-000-330",
+      "fecha_envio": "22/09/2025",
+      "proveedor": {
+        "nombre": "JIMENEZ BENAVIDES ONAUR JUMANDY ",
+        "tipo_servicio": "Consulta Médica"
+      },
+      "estado": "En Revisión",
+      "monto_solicitado": 1500.0,
+      "monto_aprobado": null,
+      "moneda": "$",
+      "acciones": {
+        "ver": true,
+        "subir": true
+      }
+    },
+    {
+      "id_reclamo": "CLM-000-331",
+      "fecha_envio": "22/09/2025",
+      "proveedor": {
+        "nombre": "JIMENEZ BENAVIDES ONAUR JUMANDY ",
+        "tipo_servicio": "Consulta Médica"
+      },
+      "estado": "En Revisión",
+      "monto_solicitado": 1500.0,
+      "monto_aprobado": null,
+      "moneda": "$",
+      "acciones": {
+        "ver": true,
+        "subir": true
+      }
+    },
+    {
+      "id_reclamo": "CLM-000-332",
+      "fecha_envio": "22/09/2025",
+      "proveedor": {
+        "nombre": "JIMENEZ BENAVIDES ONAUR JUMANDY ",
+        "tipo_servicio": "Consulta Médica"
+      },
+      "estado": "En Revisión",
+      "monto_solicitado": 1500.0,
+      "monto_aprobado": null,
+      "moneda": "$",
+      "acciones": {
+        "ver": true,
+        "subir": true
+      }
+    },
+    {
+      "id_reclamo": "CLM-000-333",
+      "fecha_envio": "22/09/2025",
+      "proveedor": {
+        "nombre": "JIMENEZ BENAVIDES ONAUR JUMANDY ",
+        "tipo_servicio": "Consulta Médica"
+      },
+      "estado": "En Revisión",
+      "monto_solicitado": 1500.0,
+      "monto_aprobado": null,
+      "moneda": "$",
+      "acciones": {
+        "ver": true,
+        "subir": true
+      }
+    },
+    {
+      "id_reclamo": "CLM-000-334",
+      "fecha_envio": "22/09/2025",
+      "proveedor": {
+        "nombre": "JIMENEZ BENAVIDES ONAUR JUMANDY ",
+        "tipo_servicio": "Consulta Médica"
+      },
+      "estado": "En Revisión",
+      "monto_solicitado": 1500.0,
+      "monto_aprobado": null,
+      "moneda": "$",
+      "acciones": {
+        "ver": true,
+        "subir": true
+      }
+    },
+    {
+      "id_reclamo": "CLM-000-335",
+      "fecha_envio": "22/09/2025",
+      "proveedor": {
+        "nombre": "JIMENEZ BENAVIDES ONAUR JUMANDY ",
+        "tipo_servicio": "Consulta Médica"
+      },
+      "estado": "En Revisión",
+      "monto_solicitado": 1500.0,
+      "monto_aprobado": null,
+      "moneda": "$",
+      "acciones": {
+        "ver": true,
+        "subir": true
+      }
+    },
+    {
+      "id_reclamo": "CLM-000-336",
+      "fecha_envio": "22/09/2025",
+      "proveedor": {
+        "nombre": "JIMENEZ BENAVIDES ONAUR JUMANDY ",
+        "tipo_servicio": "Consulta Médica"
+      },
+      "estado": "En Revisión",
+      "monto_solicitado": 1500.0,
+      "monto_aprobado": null,
+      "moneda": "$",
+      "acciones": {
+        "ver": true,
+        "subir": true
+      }
+    },
+    {
+      "id_reclamo": "CLM-000-337",
+      "fecha_envio": "22/09/2025",
+      "proveedor": {
+        "nombre": "JIMENEZ BENAVIDES ONAUR JUMANDY ",
+        "tipo_servicio": "Consulta Médica"
+      },
+      "estado": "En Revisión",
+      "monto_solicitado": 1500.0,
+      "monto_aprobado": null,
+      "moneda": "$",
+      "acciones": {
+        "ver": true,
+        "subir": true
+      }
+    },
+    {
+      "id_reclamo": "CLM-000-338",
+      "fecha_envio": "22/09/2025",
+      "proveedor": {
+        "nombre": "JIMENEZ BENAVIDES ONAUR JUMANDY ",
+        "tipo_servicio": "Consulta Médica"
+      },
+      "estado": "En Revisión",
+      "monto_solicitado": 1500.0,
+      "monto_aprobado": null,
+      "moneda": "$",
+      "acciones": {
+        "ver": true,
+        "subir": true
+      }
+    },
+    {
+      "id_reclamo": "CLM-000-339",
+      "fecha_envio": "22/09/2025",
+      "proveedor": {
+        "nombre": "JIMENEZ BENAVIDES ONAUR JUMANDY ",
+        "tipo_servicio": "Consulta Médica"
+      },
+      "estado": "En Revisión",
+      "monto_solicitado": 1500.0,
+      "monto_aprobado": null,
+      "moneda": "$",
+      "acciones": {
+        "ver": true,
+        "subir": true
+      }
     }
   ],
   "metadatos": {
-    "total_reclamos": 316,
+    "total_reclamos": 339,
     "estados_disponibles": [
       "En Revisión",
       "Aprobado",
