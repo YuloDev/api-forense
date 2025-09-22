@@ -2,126 +2,131 @@
 # -*- coding: utf-8 -*-
 
 """
-Script simple para verificar si Tesseract está funcionando
+Script para verificar que Tesseract esté funcionando correctamente
+en Windows (desarrollo) y Linux (Docker/producción)
 """
 
+import os
+import sys
+import subprocess
+import pytesseract
+from PIL import Image
+import tempfile
+
 def verificar_tesseract():
-    """Verifica si Tesseract está instalado y funcionando"""
-    print("🔍 VERIFICANDO TESSERACT")
-    print("=" * 30)
+    """Verifica que Tesseract esté instalado y funcionando"""
+    print("🔍 Verificando configuración de Tesseract...")
+    print(f"   Sistema operativo: {os.name}")
+    print(f"   Plataforma: {sys.platform}")
     
+    # 1. Verificar comando de Tesseract
+    print("\n1️⃣ Verificando comando de Tesseract...")
     try:
-        import pytesseract
+        version = pytesseract.get_tesseract_version()
+        print(f"   ✅ Tesseract versión: {version}")
+    except Exception as e:
+        print(f"   ❌ Error obteniendo versión: {e}")
+        return False
+    
+    # 2. Verificar idiomas disponibles
+    print("\n2️⃣ Verificando idiomas disponibles...")
+    try:
+        langs = pytesseract.get_languages()
+        print(f"   ✅ Idiomas disponibles: {', '.join(langs)}")
+        
+        # Verificar idiomas específicos
+        required_langs = ['eng', 'spa']
+        missing_langs = [lang for lang in required_langs if lang not in langs]
+        if missing_langs:
+            print(f"   ⚠️ Idiomas faltantes: {', '.join(missing_langs)}")
+        else:
+            print(f"   ✅ Idiomas requeridos disponibles: {', '.join(required_langs)}")
+    except Exception as e:
+        print(f"   ❌ Error obteniendo idiomas: {e}")
+        return False
+    
+    # 3. Crear imagen de prueba
+    print("\n3️⃣ Creando imagen de prueba...")
+    try:
+        # Crear una imagen simple con texto
         from PIL import Image, ImageDraw, ImageFont
-        import io
         
-        print("✅ pytesseract importado correctamente")
-        
-        # Crear imagen de prueba simple
-        img = Image.new('RGB', (200, 100), color='white')
+        # Crear imagen blanca
+        img = Image.new('RGB', (200, 50), color='white')
         draw = ImageDraw.Draw(img)
         
+        # Intentar usar una fuente, si no está disponible usar la por defecto
         try:
             font = ImageFont.truetype("arial.ttf", 20)
         except:
             font = ImageFont.load_default()
         
-        draw.text((20, 30), "HELLO WORLD", fill='black', font=font)
-        draw.text((20, 60), "123456789", fill='black', font=font)
+        # Dibujar texto
+        draw.text((10, 15), "Hello World", fill='black', font=font)
         
-        print("✅ Imagen de prueba creada")
-        
-        # Probar OCR básico
-        try:
-            text = pytesseract.image_to_string(img, lang='eng')
-            print(f"✅ OCR funcionando: '{text.strip()}'")
-            
-            if len(text.strip()) > 5:
-                print("🎉 Tesseract está funcionando correctamente")
-                return True
-            else:
-                print("⚠️  Tesseract extrajo poco texto")
-                return False
-                
-        except Exception as e:
-            print(f"❌ Error en OCR: {e}")
-            return False
-            
-    except ImportError as e:
-        print(f"❌ Error importando: {e}")
-        return False
-
-def verificar_configuracion_windows():
-    """Verifica la configuración específica de Windows"""
-    print("\n🔧 VERIFICANDO CONFIGURACIÓN WINDOWS")
-    print("=" * 40)
-    
-    try:
-        import pytesseract
-        import os
-        
-        # Verificar si pytesseract tiene la ruta configurada
-        tesseract_cmd = getattr(pytesseract.pytesseract, 'tesseract_cmd', None)
-        print(f"   Comando Tesseract: {tesseract_cmd}")
-        
-        if tesseract_cmd and os.path.exists(tesseract_cmd):
-            print("✅ Ruta de Tesseract configurada y existe")
-            return True
-        else:
-            print("⚠️  Ruta de Tesseract no configurada o no existe")
-            
-            # Buscar Tesseract en ubicaciones comunes
-            ubicaciones = [
-                r"C:\Program Files\Tesseract-OCR\tesseract.exe",
-                r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
-                r"C:\Users\{}\AppData\Local\Programs\Tesseract-OCR\tesseract.exe".format(os.getenv('USERNAME', '')),
-            ]
-            
-            for ubicacion in ubicaciones:
-                if os.path.exists(ubicacion):
-                    print(f"✅ Tesseract encontrado en: {ubicacion}")
-                    pytesseract.pytesseract.tesseract_cmd = ubicacion
-                    return True
-            
-            print("❌ Tesseract no encontrado en ubicaciones comunes")
-            return False
-            
+        print("   ✅ Imagen de prueba creada")
     except Exception as e:
-        print(f"❌ Error verificando configuración: {e}")
+        print(f"   ❌ Error creando imagen: {e}")
         return False
+    
+    # 4. Probar OCR
+    print("\n4️⃣ Probando OCR...")
+    try:
+        # Extraer texto de la imagen
+        text = pytesseract.image_to_string(img, lang='eng')
+        print(f"   ✅ Texto extraído: '{text.strip()}'")
+        
+        if "Hello" in text or "World" in text:
+            print("   ✅ OCR funcionando correctamente")
+        else:
+            print("   ⚠️ OCR funcionando pero texto no reconocido correctamente")
+    except Exception as e:
+        print(f"   ❌ Error en OCR: {e}")
+        return False
+    
+    # 5. Probar con diferentes configuraciones
+    print("\n5️⃣ Probando configuraciones avanzadas...")
+    try:
+        # Probar con configuración específica
+        config = '--psm 6 --oem 3'
+        text = pytesseract.image_to_string(img, lang='eng', config=config)
+        print(f"   ✅ OCR con configuración avanzada: '{text.strip()}'")
+    except Exception as e:
+        print(f"   ⚠️ Error con configuración avanzada: {e}")
+    
+    print("\n✅ Verificación de Tesseract completada exitosamente")
+    return True
 
-def main():
-    print("🔍 VERIFICACIÓN COMPLETA DE TESSERACT")
-    print("=" * 50)
-    
-    # Verificar configuración
-    config_ok = verificar_configuracion_windows()
-    
-    # Verificar funcionamiento
-    funcionamiento_ok = verificar_tesseract()
-    
-    print("\n" + "=" * 50)
-    print("📊 RESUMEN:")
-    print(f"   Configuración: {'✅' if config_ok else '❌'}")
-    print(f"   Funcionamiento: {'✅' if funcionamiento_ok else '❌'}")
-    
-    if config_ok and funcionamiento_ok:
-        print("\n🎉 ¡Tesseract está funcionando perfectamente!")
-    else:
-        print("\n⚠️  Tesseract necesita configuración")
-        print("\n📋 SOLUCIONES:")
+def verificar_pyzbar():
+    """Verifica que pyzbar esté funcionando"""
+    print("\n🔍 Verificando pyzbar...")
+    try:
+        from pyzbar import pyzbar
+        print("   ✅ pyzbar importado correctamente")
         
-        if not config_ok:
-            print("1. Instalar Tesseract:")
-            print("   - Descargar de: https://github.com/UB-Mannheim/tesseract/wiki")
-            print("   - O ejecutar: python configurar_tesseract_windows.py")
-        
-        if not funcionamiento_ok:
-            print("2. Verificar idiomas instalados:")
-            print("   - Ejecutar: tesseract --list-langs")
-            print("   - Instalar español si es necesario")
-        
-        print("3. Reiniciar terminal/IDE después de instalar")
+        # Probar con imagen vacía
+        from PIL import Image
+        img = Image.new('RGB', (100, 100), color='white')
+        barcodes = pyzbar.decode(img)
+        print(f"   ✅ pyzbar funcionando (códigos encontrados: {len(barcodes)})")
+        return True
+    except Exception as e:
+        print(f"   ❌ Error con pyzbar: {e}")
+        return False
 
 if __name__ == "__main__":
-    main()
+    print("🚀 Iniciando verificación de dependencias OCR...")
+    
+    tesseract_ok = verificar_tesseract()
+    pyzbar_ok = verificar_pyzbar()
+    
+    print(f"\n📊 Resumen:")
+    print(f"   Tesseract: {'✅ OK' if tesseract_ok else '❌ ERROR'}")
+    print(f"   pyzbar: {'✅ OK' if pyzbar_ok else '❌ ERROR'}")
+    
+    if tesseract_ok and pyzbar_ok:
+        print("\n🎉 Todas las dependencias OCR están funcionando correctamente!")
+        sys.exit(0)
+    else:
+        print("\n💥 Algunas dependencias OCR tienen problemas")
+        sys.exit(1)

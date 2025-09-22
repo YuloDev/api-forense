@@ -21,9 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
     tesseract-ocr-spa \
     tesseract-ocr-eng \
-    libtesseract-dev \
     libzbar0 \
-    libzbar-dev \
   && rm -rf /var/lib/apt/lists/*
 
 # Actualizar pip y herramientas de instalación
