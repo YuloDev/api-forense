@@ -33,6 +33,10 @@ WORKDIR /app
 COPY requerimientos.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Verificar que todas las dependencias estén instaladas
+COPY verificar_dependencias.py .
+RUN python verificar_dependencias.py
+
 # Copiar toda la aplicación
 COPY . .
 
