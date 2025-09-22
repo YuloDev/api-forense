@@ -4,6 +4,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Instalar dependencias del sistema
 # qpdf y libstdc++6 son necesarios para pikepdf
+# tesseract-ocr y dependencias para OCR
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     ca-certificates \
@@ -17,6 +18,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libharfbuzz0b \
     qpdf \
     libstdc++6 \
+    tesseract-ocr \
+    tesseract-ocr-spa \
+    tesseract-ocr-eng \
+    libtesseract-dev \
+    libzbar0 \
+    libzbar-dev \
   && rm -rf /var/lib/apt/lists/*
 
 # Actualizar pip y herramientas de instalación
