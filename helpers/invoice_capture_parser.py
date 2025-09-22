@@ -387,43 +387,8 @@ def decode_barcode_strong(pil_img: Image.Image) -> list[dict]:
     return outs
 
 # ============== Configuración de Tesseract ==============
-
-def configurar_tesseract():
-    """Configura Tesseract para Windows si es necesario"""
-    if os.name == 'nt':  # Windows
-        ubicaciones_tesseract = [
-            r"C:\Program Files\Tesseract-OCR\tesseract.exe",
-            r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
-            r"C:\Users\{}\AppData\Local\Programs\Tesseract-OCR\tesseract.exe".format(os.getenv('USERNAME', '')),
-            r"C:\tesseract\tesseract.exe",
-            r"C:\Users\{}\scoop\apps\tesseract\current\tesseract.exe".format(os.getenv('USERNAME', '')),
-            r"C:\Users\{}\AppData\Local\Microsoft\WinGet\Packages\Tesseract.Tesseract_Microsoft.Winget.Source_8wekyb3d8bbwe\tesseract.exe".format(os.getenv('USERNAME', ''))
-        ]
-        
-        for ubicacion in ubicaciones_tesseract:
-            if os.path.exists(ubicacion):
-                pytesseract.pytesseract.tesseract_cmd = ubicacion
-                print(f"✅ Tesseract configurado: {ubicacion}")
-                
-                # Configurar TESSDATA_PREFIX si es necesario
-                tessdata_dir = os.path.join(os.path.dirname(ubicacion), "tessdata")
-                if os.path.exists(tessdata_dir):
-                    os.environ["TESSDATA_PREFIX"] = tessdata_dir
-                    print(f"✅ TESSDATA_PREFIX configurado: {tessdata_dir}")
-                
-                return True
-        
-        print("⚠️  Tesseract no encontrado en ubicaciones comunes.")
-        print("📋 Para instalar Tesseract:")
-        print("   1. Descarga desde: https://github.com/UB-Mannheim/tesseract/wiki")
-        print("   2. O instala con: winget install UB-Mannheim.TesseractOCR")
-        print("   3. O instala con: choco install tesseract")
-        return False
-    
-    return True  # En otros sistemas, asumir que está en PATH
-
-# Configurar Tesseract al importar
-configurar_tesseract()
+# La configuración de Tesseract se maneja globalmente
+# No configurar aquí para evitar conflictos
 
 # ============== Utilidades básicas ==============
 

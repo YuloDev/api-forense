@@ -411,7 +411,7 @@ def _evaluar_riesgo_imagen(imagen_bytes: bytes, texto_extraido: str, campos_fact
                 "porcentaje_sospechoso": ela.get("porcentaje_sospechoso", 0),
                 "edge_density": ela.get("edge_density", 0),
                 "interpretacion": "Error Level Analysis detecta áreas con diferentes niveles de compresión" if tiene_ediciones_ela else "Error Level Analysis no detecta ediciones significativas",
-                        "posibles_causas": [
+                "posibles_causas": [
                     "Edición local de la imagen",
                     "Pegado de elementos externos",
                     "Modificación de colores o brillo",
@@ -420,8 +420,8 @@ def _evaluar_riesgo_imagen(imagen_bytes: bytes, texto_extraido: str, campos_fact
                     "Imagen sin evidencia de edición",
                     "Niveles de compresión consistentes",
                     "Sin alteraciones detectadas"
-                        ],
-                        "indicadores_clave": [
+                ],
+                "indicadores_clave": [
                     f"ELA promedio: {ela.get('ela_mean', 0):.2f}",
                     f"ELA máximo: {ela.get('ela_max', 0)}",
                     f"Porcentaje sospechoso: {ela.get('porcentaje_sospechoso', 0):.2%}",
@@ -442,20 +442,20 @@ def _evaluar_riesgo_imagen(imagen_bytes: bytes, texto_extraido: str, campos_fact
         score += penalizacion_doble_comp
         
         secundarias.append({
-                "check": "Doble compresión detectada",
-                "detalle": {
+            "check": "Doble compresión detectada",
+            "detalle": {
                 "detectado": tiene_doble_compresion,
-                    "periodicidad_detectada": doble_compresion.get("periodicidad_detectada", False),
+                "periodicidad_detectada": doble_compresion.get("periodicidad_detectada", False),
                 "confianza": doble_compresion.get("confianza", "BAJA"),
-                    "num_peaks": doble_compresion.get("num_peaks", 0),
-                    "ac_variance": doble_compresion.get("ac_variance", 0),
-                    "dc_variance": doble_compresion.get("dc_variance", 0),
+                "num_peaks": doble_compresion.get("num_peaks", 0),
+                "ac_variance": doble_compresion.get("ac_variance", 0),
+                "dc_variance": doble_compresion.get("dc_variance", 0),
                 "interpretacion": "La imagen fue comprimida múltiples veces, indicando posible edición" if tiene_doble_compresion else "Sin evidencia de doble compresión JPEG",
-                    "posibles_causas": [
-                        "Imagen editada y re-guardada",
-                        "Conversión entre formatos múltiples",
-                        "Optimización de imagen repetida",
-                        "Edición con software que re-comprime"
+                "posibles_causas": [
+                    "Imagen editada y re-guardada",
+                    "Conversión entre formatos múltiples",
+                    "Optimización de imagen repetida",
+                    "Edición con software que re-comprime"
                 ] if tiene_doble_compresion else [
                     "Imagen sin evidencia de doble compresión",
                     "Compresión JPEG única",
@@ -483,7 +483,7 @@ def _evaluar_riesgo_imagen(imagen_bytes: bytes, texto_extraido: str, campos_fact
         
         secundarias.append({
             "check": "Inconsistencias de hashes",
-                "detalle": {
+            "detalle": {
                 "detectado": tiene_inconsistencias_hash,
                 "num_inconsistencias": len(inconsistencias),
                 "inconsistencias": inconsistencias,
@@ -491,17 +491,17 @@ def _evaluar_riesgo_imagen(imagen_bytes: bytes, texto_extraido: str, campos_fact
                 "dhash": hashes.get("hashes_analisis", {}).get("dhash", ""),
                 "whash": hashes.get("hashes_analisis", {}).get("whash", ""),
                 "interpretacion": "Inconsistencias entre diferentes tipos de hashes detectadas" if tiene_inconsistencias_hash else "Hashes consistentes - sin evidencia de manipulación",
-                    "posibles_causas": [
-                        "Modificación de áreas específicas de la imagen",
-                        "Pegado de elementos con diferentes características visuales",
-                        "Aplicación de filtros o efectos selectivos",
-                        "Edición local con herramientas de retoque"
+                "posibles_causas": [
+                    "Modificación de áreas específicas de la imagen",
+                    "Pegado de elementos con diferentes características visuales",
+                    "Aplicación de filtros o efectos selectivos",
+                    "Edición local con herramientas de retoque"
                 ] if tiene_inconsistencias_hash else [
                     "Imagen sin evidencia de manipulación",
                     "Hashes perceptuales consistentes",
                     "Características visuales uniformes"
-                    ],
-                    "indicadores_clave": [
+                ],
+                "indicadores_clave": [
                     f"Inconsistencias detectadas: {len(inconsistencias)}",
                     f"pHash: {hashes.get('hashes_analisis', {}).get('phash', 'N/A')[:16]}...",
                     f"dHash: {hashes.get('hashes_analisis', {}).get('dhash', 'N/A')[:16]}...",
@@ -521,8 +521,8 @@ def _evaluar_riesgo_imagen(imagen_bytes: bytes, texto_extraido: str, campos_fact
         score += penalizacion_metadatos
         
         adicionales.append({
-                "check": "Metadatos sospechosos",
-                "detalle": {
+            "check": "Metadatos sospechosos",
+            "detalle": {
                 "detectado": tiene_metadatos_sospechosos,
                 "exif_presente": len(metadatos.get("exif_completo", {})) > 0,
                 "xmp_presente": len(metadatos.get("xmp", {})) > 0,
@@ -530,17 +530,17 @@ def _evaluar_riesgo_imagen(imagen_bytes: bytes, texto_extraido: str, campos_fact
                 "camara_analisis": metadatos.get("camara_analisis", []),
                 "compresion_analisis": compresion_analisis,
                 "interpretacion": "Metadatos contienen información sospechosa o inconsistente" if tiene_metadatos_sospechosos else "Metadatos normales - sin evidencia de manipulación",
-                    "posibles_causas": [
-                        "Edición con software que modifica metadatos",
-                        "Conversión entre formatos que altera metadatos",
-                        "Manipulación intencional de metadatos",
-                        "Uso de software de edición no estándar"
+                "posibles_causas": [
+                    "Edición con software que modifica metadatos",
+                    "Conversión entre formatos que altera metadatos",
+                    "Manipulación intencional de metadatos",
+                    "Uso de software de edición no estándar"
                 ] if tiene_metadatos_sospechosos else [
                     "Metadatos originales preservados",
                     "Sin evidencia de edición en metadatos",
                     "Información de cámara/dispositivo consistente"
-                    ],
-                    "indicadores_clave": [
+                ],
+                "indicadores_clave": [
                     f"EXIF presente: {len(metadatos.get('exif_completo', {})) > 0}",
                     f"XMP presente: {len(metadatos.get('xmp', {})) > 0}",
                     f"Software edición: {len(metadatos.get('software_edicion', []))}",
@@ -591,187 +591,247 @@ def _evaluar_riesgo_imagen(imagen_bytes: bytes, texto_extraido: str, campos_fact
 async def validar_imagen(req: PeticionImagen):
     t_all = time.perf_counter()
 
-    # 1) Decodificar base64
-    t0 = time.perf_counter()
     try:
-        archivo_bytes = base64.b64decode(req.imagen_base64, validate=True)
-    except Exception:
-        raise HTTPException(status_code=400, detail="El campo 'imagen_base64' no es base64 válido.")
-    
-    if len(archivo_bytes) > MAX_PDF_BYTES:  # Usar el mismo límite por ahora
-        raise HTTPException(status_code=413, detail=f"El archivo excede el tamaño máximo permitido ({MAX_PDF_BYTES} bytes).")
-    log_step("1) decode base64", t0)
+        # 1) Decodificar base64
+        t0 = time.perf_counter()
+        try:
+            archivo_bytes = base64.b64decode(req.imagen_base64, validate=True)
+        except Exception:
+            raise HTTPException(status_code=400, detail="El campo 'imagen_base64' no es base64 válido.")
+        
+        if len(archivo_bytes) > MAX_PDF_BYTES:  # Usar el mismo límite por ahora
+            raise HTTPException(status_code=413, detail=f"El archivo excede el tamaño máximo permitido ({MAX_PDF_BYTES} bytes).")
+        log_step("1) decode base64", t0)
 
-    # 2) Detectar tipo de archivo
-    t0 = time.perf_counter()
-    tipo_info = detectar_tipo_archivo(req.imagen_base64)
-    if not tipo_info["valido"] or tipo_info["tipo"] not in ["PNG", "JPEG", "JPG", "TIFF", "BMP", "WEBP"]:
-        raise HTTPException(status_code=400, detail=f"Archivo no es una imagen válida: {tipo_info.get('error', 'Tipo no soportado')}")
-    tipo_archivo = tipo_info["tipo"]
-    log_step("2) detectar tipo imagen", t0)
+        # 2) Detectar tipo de archivo
+        t0 = time.perf_counter()
+        tipo_info = detectar_tipo_archivo(req.imagen_base64)
+        if not tipo_info["valido"] or tipo_info["tipo"] not in ["PNG", "JPEG", "JPG", "TIFF", "BMP", "WEBP"]:
+            raise HTTPException(status_code=400, detail=f"Archivo no es una imagen válida: {tipo_info.get('error', 'Tipo no soportado')}")
+        tipo_archivo = tipo_info["tipo"]
+        log_step("2) detectar tipo imagen", t0)
 
-    # 3) Parser avanzado de facturas SRI
-    t0 = time.perf_counter()
-    try:
-        parse_result = parse_capture_from_bytes(archivo_bytes, f"capture.{tipo_archivo.lower()}")
-        texto_extraido = parse_result.ocr_text
-        campos_factura_avanzados = {
-            "ruc": parse_result.metadata.ruc,
-            "razonSocial": parse_result.metadata.buyer_name,
-            "fechaEmision": parse_result.metadata.issue_datetime,
-            "importeTotal": parse_result.totals.total,
-            "claveAcceso": parse_result.metadata.access_key,
-            "detalles": [{
-                "cantidad": item.qty or 0,
-                "descripcion": item.description or "",
-                "precioTotal": item.line_total or 0
-            } for item in parse_result.items],
-            "totals": {
-                "subtotal15": parse_result.totals.subtotal15,
-                "subtotal0": parse_result.totals.subtotal0,
-                "subtotal_no_objeto": parse_result.totals.subtotal_no_objeto,
-                "subtotal_sin_impuestos": parse_result.totals.subtotal_sin_impuestos,
-                "descuento": parse_result.totals.descuento,
-                "iva15": parse_result.totals.iva15,
-                "total": parse_result.totals.total
-            },
-            "barcodes": parse_result.barcodes,
-            "financial_checks": parse_result.checks,
-            "metadata": {
-                "invoice_number": parse_result.metadata.invoice_number,
-                "authorization": parse_result.metadata.authorization,
-                "environment": parse_result.metadata.environment,
-                "buyer_id": parse_result.metadata.buyer_id,
-                "emitter_name": parse_result.metadata.emitter_name,
-                "file_metadata": {
-                    "sha256": parse_result.metadata.sha256,
-                    "width": parse_result.metadata.width,
-                    "height": parse_result.metadata.height,
-                    "dpi": parse_result.metadata.dpi,
-                    "mode": parse_result.metadata.mode,
-                    "format": parse_result.metadata.format
+        # 3) Parser avanzado de facturas SRI
+        t0 = time.perf_counter()
+        try:
+            parse_result = parse_capture_from_bytes(archivo_bytes, f"capture.{tipo_archivo.lower()}")
+            texto_extraido = parse_result.ocr_text
+            campos_factura_avanzados = {
+                "ruc": parse_result.metadata.ruc,
+                "razonSocial": parse_result.metadata.buyer_name,
+                "fechaEmision": parse_result.metadata.issue_datetime,
+                "importeTotal": parse_result.totals.total,
+                "claveAcceso": parse_result.metadata.access_key,
+                "detalles": [{
+                    "cantidad": item.qty or 0,
+                    "descripcion": item.description or "",
+                    "precioTotal": item.line_total or 0
+                } for item in parse_result.items],
+                "totals": {
+                    "subtotal15": parse_result.totals.subtotal15,
+                    "subtotal0": parse_result.totals.subtotal0,
+                    "subtotal_no_objeto": parse_result.totals.subtotal_no_objeto,
+                    "subtotal_sin_impuestos": parse_result.totals.subtotal_sin_impuestos,
+                    "descuento": parse_result.totals.descuento,
+                    "iva15": parse_result.totals.iva15,
+                    "total": parse_result.totals.total
+                },
+                "barcodes": parse_result.barcodes,
+                "financial_checks": parse_result.checks,
+                "metadata": {
+                    "invoice_number": parse_result.metadata.invoice_number,
+                    "authorization": parse_result.metadata.authorization,
+                    "environment": parse_result.metadata.environment,
+                    "buyer_id": parse_result.metadata.buyer_id,
+                    "emitter_name": parse_result.metadata.emitter_name,
+                    "file_metadata": {
+                        "sha256": parse_result.metadata.sha256,
+                        "width": parse_result.metadata.width,
+                        "height": parse_result.metadata.height,
+                        "dpi": parse_result.metadata.dpi,
+                        "mode": parse_result.metadata.mode,
+                        "format": parse_result.metadata.format
+                    }
                 }
             }
+            log_step("3) parser avanzado facturas SRI", t0)
+        except Exception as e:
+            print(f"❌ Error en parser avanzado: {e}")
+            print(f"   Tipo de error: {type(e).__name__}")
+            import traceback
+            print(f"   Traceback: {traceback.format_exc()}")
+            # Fallback al método anterior
+            texto_extraido = _extraer_texto_imagen(archivo_bytes)
+            campos_factura_avanzados = _extraer_campos_factura_imagen(texto_extraido)
+            log_step("3) fallback extracción básica", t0)
+
+        # 4) Usar campos avanzados como campos_factura
+        campos_factura = campos_factura_avanzados
+
+        # 5) Análisis forense completo
+        t0 = time.perf_counter()
+        analisis_forense_profesional = None  # Inicializar variable para análisis forense profesional
+        try:
+            # Convertir imagen a JPEG si no es JPEG/JPG para análisis forense
+            imagen_bytes_jpeg = archivo_bytes
+            # Detectar tipo de archivo para conversión
+            tipo_info = detectar_tipo_archivo(req.imagen_base64)
+            tipo_archivo = tipo_info.get("tipo", "UNKNOWN").upper()
+            if not tipo_archivo in ["JPEG", "JPG"]:
+                try:
+                    from PIL import Image
+                    import io
+                    
+                    # Abrir imagen original
+                    img_original = Image.open(io.BytesIO(archivo_bytes))
+                    
+                    # Convertir a RGB si es necesario
+                    if img_original.mode not in ("RGB", "L"):
+                        img_original = img_original.convert("RGB")
+                    
+                    # Convertir a JPEG con calidad 95
+                    jpeg_buffer = io.BytesIO()
+                    img_original.save(jpeg_buffer, format="JPEG", quality=95, optimize=True)
+                    imagen_bytes_jpeg = jpeg_buffer.getvalue()
+                    
+                    # Convertir a base64 para el análisis
+                    imagen_base64_jpeg = base64.b64encode(imagen_bytes_jpeg).decode('utf-8')
+                    
+                    print(f"Imagen convertida a JPEG para análisis forense. Tamaño original: {len(archivo_bytes)} bytes, JPEG: {len(imagen_bytes_jpeg)} bytes")
+                    
+                except Exception as e:
+                    print(f"Error convirtiendo imagen a JPEG: {e}")
+                    # Usar imagen original si falla la conversión
+                    imagen_base64_jpeg = req.imagen_base64
+            else:
+                imagen_base64_jpeg = req.imagen_base64
+            
+            # Análisis forense profesional completo (único análisis forense)
+            try:
+                from helpers.analisis_forense_profesional import analisis_forense_completo
+                analisis_forense_profesional = analisis_forense_completo(archivo_bytes)
+            except Exception as e_profesional:
+                print(f"Error en análisis forense profesional: {e_profesional}")
+                analisis_forense_profesional = None
+            
+            log_step("5) análisis forense profesional", t0)
+        except Exception as e:
+            print(f"Error en análisis forense profesional: {e}")
+            analisis_forense_profesional = None
+
+        # 6) Preparar validación de firmas (siempre falsa para imágenes)
+        validacion_firmas = {
+            "resumen": {"total_firmas": 0, "firmas_validas": 0, "firmas_invalidas": 0, "con_certificados": 0, "con_timestamps": 0, "con_politicas": 0, "porcentaje_validas": 0},
+            "dependencias": {"asn1crypto": False, "oscrypto": False, "certvalidator": False},
+            "analisis_sri": {"es_documento_sri": False, "ruc_emisor": None, "razon_social": None, "numero_documento": None, "fecha_emision": None, "clave_acceso": None, "ambiente": None, "tipo_emision": None},
+            "validacion_pdf": {"firma_detectada": False, "tipo_firma": "ninguna", "es_pades": False, "metadatos": {"numero_firmas": 0}},
+            "tipo_documento": tipo_archivo.lower(),
+            "firma_detectada": False
         }
-        log_step("3) parser avanzado facturas SRI", t0)
+
+        # 7) Integrar validación SRI en los datos de la factura
+        factura_con_sri = integrar_validacion_sri(campos_factura)
+        
+        # 8) Evaluación de riesgo (después de la validación SRI)
+        t0 = time.perf_counter()
+        riesgo = _evaluar_riesgo_imagen(archivo_bytes, texto_extraido, factura_con_sri, analisis_forense_profesional)
+        log_step("8) evaluación de riesgo", t0)
+
+        # 9) Preparar respuesta final
+        log_step("TOTAL", t_all)
+        
+        # Usar el resultado de la validación SRI para el mensaje principal
+        sri_verificado = factura_con_sri.get("sri_verificado", False)
+        mensaje_sri = factura_con_sri.get("mensaje", f"Análisis forense de imagen {tipo_archivo} completado.")
+        
+        return JSONResponse(
+            status_code=200,
+            content=safe_serialize_dict({
+                "sri_verificado": sri_verificado,
+                "mensaje": mensaje_sri,
+                "tipo_archivo": tipo_archivo,
+                "coincidencia": "no",  # Las imágenes no se pueden comparar con SRI
+                "diferencias": {},
+                "diferenciasProductos": [],
+                "resumenProductos": {
+                    "num_sri": 0,
+                    "num_imagen": len(campos_factura.get("detalles", [])),
+                    "total_sri_items": 0,
+                    "total_imagen_items": sum(d.get("precioTotal", 0) for d in campos_factura.get("detalles", []))
+                },
+                "factura": factura_con_sri,
+                "clave_acceso_parseada": parse_result.access_key_parsed if 'parse_result' in locals() else None,
+                "riesgo": riesgo,
+                "validacion_firmas": validacion_firmas,
+                "analisis_forense_profesional": analisis_forense_profesional,
+                "texto_extraido": texto_extraido[:1000] + "..." if len(texto_extraido) > 1000 else texto_extraido,
+                "parser_avanzado": {
+                    "disponible": "financial_checks" in campos_factura,
+                    "barcodes_detectados": len(campos_factura.get("barcodes", [])),
+                    "items_detectados": len(campos_factura.get("detalles", [])),
+                    "validaciones_financieras": campos_factura.get("financial_checks", {}),
+                    "metadatos_avanzados": campos_factura.get("metadata", {})
+                }
+            })
+        )
+    
     except Exception as e:
-        print(f"❌ Error en parser avanzado: {e}")
-        print(f"   Tipo de error: {type(e).__name__}")
+        print(f"❌ Error global en validar-imagen: {e}")
         import traceback
         print(f"   Traceback: {traceback.format_exc()}")
-        # Fallback al método anterior
-        texto_extraido = _extraer_texto_imagen(archivo_bytes)
-        campos_factura_avanzados = _extraer_campos_factura_imagen(texto_extraido)
-        log_step("3) fallback extracción básica", t0)
-
-    # 4) Usar campos avanzados como campos_factura
-    campos_factura = campos_factura_avanzados
-
-    # 5) Análisis forense completo
-    t0 = time.perf_counter()
-    analisis_forense_profesional = None  # Inicializar variable para análisis forense profesional
-    try:
-        # Convertir imagen a JPEG si no es JPEG/JPG para análisis forense
-        imagen_bytes_jpeg = archivo_bytes
-        # Detectar tipo de archivo para conversión
-        tipo_info = detectar_tipo_archivo(req.imagen_base64)
-        tipo_archivo = tipo_info.get("tipo", "UNKNOWN").upper()
-        if not tipo_archivo in ["JPEG", "JPG"]:
-            try:
-                from PIL import Image
-                import io
-                
-                # Abrir imagen original
-                img_original = Image.open(io.BytesIO(archivo_bytes))
-                
-                # Convertir a RGB si es necesario
-                if img_original.mode not in ("RGB", "L"):
-                    img_original = img_original.convert("RGB")
-                
-                # Convertir a JPEG con calidad 95
-                jpeg_buffer = io.BytesIO()
-                img_original.save(jpeg_buffer, format="JPEG", quality=95, optimize=True)
-                imagen_bytes_jpeg = jpeg_buffer.getvalue()
-                
-                # Convertir a base64 para el análisis
-                imagen_base64_jpeg = base64.b64encode(imagen_bytes_jpeg).decode('utf-8')
-                
-                print(f"Imagen convertida a JPEG para análisis forense. Tamaño original: {len(archivo_bytes)} bytes, JPEG: {len(imagen_bytes_jpeg)} bytes")
-                
-            except Exception as e:
-                print(f"Error convirtiendo imagen a JPEG: {e}")
-                # Usar imagen original si falla la conversión
-                imagen_base64_jpeg = req.imagen_base64
-        else:
-            imagen_base64_jpeg = req.imagen_base64
         
-        # Análisis forense profesional completo (único análisis forense)
-        try:
-            from helpers.analisis_forense_profesional import analisis_forense_completo
-            analisis_forense_profesional = analisis_forense_completo(archivo_bytes)
-        except Exception as e_profesional:
-            print(f"Error en análisis forense profesional: {e_profesional}")
-            analisis_forense_profesional = None
-        
-        log_step("5) análisis forense profesional", t0)
-    except Exception as e:
-        print(f"Error en análisis forense profesional: {e}")
-        analisis_forense_profesional = None
-
-    # 6) Preparar validación de firmas (siempre falsa para imágenes)
-    validacion_firmas = {
-        "resumen": {"total_firmas": 0, "firmas_validas": 0, "firmas_invalidas": 0, "con_certificados": 0, "con_timestamps": 0, "con_politicas": 0, "porcentaje_validas": 0},
-        "dependencias": {"asn1crypto": False, "oscrypto": False, "certvalidator": False},
-        "analisis_sri": {"es_documento_sri": False, "ruc_emisor": None, "razon_social": None, "numero_documento": None, "fecha_emision": None, "clave_acceso": None, "ambiente": None, "tipo_emision": None},
-        "validacion_pdf": {"firma_detectada": False, "tipo_firma": "ninguna", "es_pades": False, "metadatos": {"numero_firmas": 0}},
-        "tipo_documento": tipo_archivo.lower(),
-        "firma_detectada": False
-    }
-
-    # 7) Integrar validación SRI en los datos de la factura
-    factura_con_sri = integrar_validacion_sri(campos_factura)
-    
-    # 8) Evaluación de riesgo (después de la validación SRI)
-    t0 = time.perf_counter()
-    riesgo = _evaluar_riesgo_imagen(archivo_bytes, texto_extraido, factura_con_sri, analisis_forense_profesional)
-    log_step("8) evaluación de riesgo", t0)
-
-
-    # 9) Preparar respuesta final
-    log_step("TOTAL", t_all)
-    
-    # Usar el resultado de la validación SRI para el mensaje principal
-    sri_verificado = factura_con_sri.get("sri_verificado", False)
-    mensaje_sri = factura_con_sri.get("mensaje", f"Análisis forense de imagen {tipo_archivo} completado.")
-    
-    return JSONResponse(
-        status_code=200,
-        content=safe_serialize_dict({
-            "sri_verificado": sri_verificado,
-            "mensaje": mensaje_sri,
-            "tipo_archivo": tipo_archivo,
-            "coincidencia": "no",  # Las imágenes no se pueden comparar con SRI
-            "diferencias": {},
-            "diferenciasProductos": [],
-            "resumenProductos": {
-                "num_sri": 0,
-                "num_imagen": len(campos_factura.get("detalles", [])),
-                "total_sri_items": 0,
-                "total_imagen_items": sum(d.get("precioTotal", 0) for d in campos_factura.get("detalles", []))
-            },
-            "factura": factura_con_sri,
-            "clave_acceso_parseada": parse_result.access_key_parsed if 'parse_result' in locals() else None,
-            "riesgo": riesgo,
-            "validacion_firmas": validacion_firmas,
-            "analisis_forense_profesional": analisis_forense_profesional,
-            "texto_extraido": texto_extraido[:1000] + "..." if len(texto_extraido) > 1000 else texto_extraido,
-            "parser_avanzado": {
-                "disponible": "financial_checks" in campos_factura,
-                "barcodes_detectados": len(campos_factura.get("barcodes", [])),
-                "items_detectados": len(campos_factura.get("detalles", [])),
-                "validaciones_financieras": campos_factura.get("financial_checks", {}),
-                "metadatos_avanzados": campos_factura.get("metadata", {})
+        # Respuesta de error genérica
+        return JSONResponse(
+            status_code=500,
+            content={
+                "sri_verificado": False,
+                "mensaje": f"Error interno del servidor: {str(e)}",
+                "tipo_archivo": "ERROR",
+                "coincidencia": "no",
+                "diferencias": {},
+                "diferenciasProductos": [],
+                "resumenProductos": {
+                    "num_sri": 0,
+                    "num_imagen": 0,
+                    "total_sri_items": 0,
+                    "total_imagen_items": 0
+                },
+                "factura": {},
+                "clave_acceso_parseada": None,
+                "riesgo": {
+                    "score": 100,
+                    "nivel": "alto",
+                    "es_falso_probable": True,
+                    "prioritarias": [{
+                        "check": "Error del sistema",
+                        "detalle": {
+                            "error": str(e),
+                            "tipo_error": type(e).__name__,
+                            "interpretacion": "Error interno del servidor durante el procesamiento",
+                            "recomendacion": "Contactar al administrador del sistema"
+                        },
+                        "penalizacion": 100
+                    }],
+                    "secundarias": [],
+                    "adicionales": []
+                },
+                "validacion_firmas": {
+                    "resumen": {"total_firmas": 0, "firmas_validas": 0, "firmas_invalidas": 0, "con_certificados": 0, "con_timestamps": 0, "con_politicas": 0, "porcentaje_validas": 0},
+                    "dependencias": {"asn1crypto": False, "oscrypto": False, "certvalidator": False},
+                    "analisis_sri": {"es_documento_sri": False, "ruc_emisor": None, "razon_social": None, "numero_documento": None, "fecha_emision": None, "clave_acceso": None, "ambiente": None, "tipo_emision": None},
+                    "validacion_pdf": {"firma_detectada": False, "tipo_firma": "ninguna", "es_pades": False, "metadatos": {"numero_firmas": 0}},
+                    "tipo_documento": "error",
+                    "firma_detectada": False
+                },
+                "analisis_forense_profesional": None,
+                "texto_extraido": "",
+                "parser_avanzado": {
+                    "disponible": False,
+                    "barcodes_detectados": 0,
+                    "items_detectados": 0,
+                    "validaciones_financieras": {},
+                    "metadatos_avanzados": {}
+                }
             }
-        })
-    )
+        )
         

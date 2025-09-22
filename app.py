@@ -1,50 +1,6 @@
-# Configurar Tesseract ANTES de importar cualquier módulo
-import os
+# La configuración de Tesseract se maneja globalmente
+# Importar pytesseract sin configurar para evitar conflictos
 import pytesseract
-
-# Configuración de Tesseract para Windows y Linux
-def configurar_tesseract():
-    """Configura Tesseract para Windows (desarrollo) y Linux (Docker/producción)"""
-    if os.name == 'nt':  # Windows
-        # Ruta de Windows (desarrollo local)
-        tesseract_path = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-        if os.path.exists(tesseract_path):
-            pytesseract.pytesseract.tesseract_cmd = tesseract_path
-            print(f"✅ Tesseract configurado para Windows: {tesseract_path}")
-        else:
-            print("⚠️ Tesseract no encontrado en Windows, usando configuración por defecto")
-    else:  # Linux (Docker/producción)
-        # En Linux, Tesseract debe estar instalado en el PATH
-        # Comandos típicos: tesseract, /usr/bin/tesseract, /usr/local/bin/tesseract
-        possible_paths = [
-            'tesseract',
-            '/usr/bin/tesseract',
-            '/usr/local/bin/tesseract',
-            '/opt/homebrew/bin/tesseract'  # macOS con Homebrew
-        ]
-        
-        tesseract_found = False
-        for path in possible_paths:
-            try:
-                # Verificar si el comando existe
-                import subprocess
-                result = subprocess.run([path, '--version'], 
-                                      capture_output=True, text=True, timeout=5)
-                if result.returncode == 0:
-                    pytesseract.pytesseract.tesseract_cmd = path
-                    print(f"✅ Tesseract configurado para Linux: {path}")
-                    tesseract_found = True
-                    break
-            except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-                continue
-        
-        if not tesseract_found:
-            print("⚠️ Tesseract no encontrado en Linux, usando configuración por defecto")
-            # En Docker, Tesseract debería estar en el PATH por defecto
-            pytesseract.pytesseract.tesseract_cmd = 'tesseract'
-
-# Configurar Tesseract
-configurar_tesseract()
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
