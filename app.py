@@ -4,6 +4,7 @@ pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tessera
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from routes import health, validar, validar_documento, config, risk_levels, alineacion, reclamos, deteccion_texto, validacion_firma_universal, validar_imagen, validar_factura, validar_factura_fast, validar_factura_nuevo
  
 app = FastAPI(
@@ -11,17 +12,34 @@ app = FastAPI(
     version="1.50.0-risk"
 )
  
-# Middleware CORS - Configuración mejorada para desarrollo y producción
+origins = [
+    "http://localhost:4028",            # tu frontend en dev
+    "https://claims-app.nextisolutions.com",  # frontend en producción
+    "https://api-forense.nextisolutions.com", # API en producción
+    "*"  # Permitir todos los orígenes temporalmente para debug
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "*"
-    ],
-    allow_credentials=True,
+    allow_origins=["*"],  # Permitir todos los orígenes temporalmente
+    allow_credentials=False,  # Debe ser False cuando allow_origins=["*"]
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
- 
+
+# Endpoint para manejar peticiones OPTIONS (CORS preflight)
+@app.options("/{path:path}")
+async def options_handler(path: str):
+    return Response(
+        status_code=200,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
+            "Access-Control-Max-Age": "86400"
+        }
+    )
+
 # Registrar rutas
 app.include_router(health.router)
 app.include_router(validar.router)
