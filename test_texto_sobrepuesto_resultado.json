@@ -1,0 +1,11 @@
+{
+  "error": "Error en detección de texto sobrepuesto: tesseract is not installed or it's not in your PATH. See README file for more information.",
+  "items": [],
+  "resumen": {
+    "n_palabras": 0,
+    "n_overlays": 0,
+    "max_score": 0.0,
+    "mean_score_overlay": 0.0
+  },
+  "annotated_image_b64": ""
+}

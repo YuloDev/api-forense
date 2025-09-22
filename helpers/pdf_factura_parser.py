@@ -16,6 +16,8 @@ from typing import Dict, Any, Optional, List
 
 try:
     import pytesseract
+    # Configurar ruta de Tesseract para Windows
+    pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 except Exception:
     pytesseract = None
 

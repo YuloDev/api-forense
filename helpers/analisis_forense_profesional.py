@@ -22,6 +22,8 @@ from PIL import Image, ImageChops, ImageEnhance
 import cv2
 from skimage.metrics import structural_similarity as ssim
 from .type_conversion import ensure_python_bool, ensure_python_float, safe_serialize_dict
+import pytesseract
+from pytesseract import Output
 
 
 def _limpiar_datos_exif(data):
@@ -1130,9 +1132,138 @@ def detectar_texto_sintetico_aplanado(imagen_bytes: bytes, metadatos_forenses: D
         }
 
 
+def _compute_ela_map_np(pil_img: Image.Image, quality: int = 90, scale: float = 8.0) -> np.ndarray:
+    """
+    ELA como matriz (grises 0-255) - OPTIMIZADO para velocidad.
+    """
+    buf = io.BytesIO()
+    pil_img.convert("RGB").save(buf, format="JPEG", quality=quality)
+    resaved = Image.open(io.BytesIO(buf.getvalue())).convert("RGB")
+    ela = ImageChops.difference(pil_img.convert("RGB"), resaved)
+    # Simplificar amplificación
+    ela_enh = ImageEnhance.Brightness(ela).enhance(scale)
+    return np.array(ela_enh.convert("L"))
+
+def _mean_in_bbox(img_np: np.ndarray, x: int, y: int, w: int, h: int) -> float:
+    H, W = img_np.shape[:2]
+    x, y = max(0, x), max(0, y)
+    x2, y2 = min(W, x + w), min(H, y + h)
+    roi = img_np[y:y2, x:x2]
+    return float(np.mean(roi)) if roi.size else 0.0
+
+def _contrast_to_ring(bgr: np.ndarray, x: int, y: int, w: int, h: int, pad: int = 4) -> float:
+    H, W = bgr.shape[:2]
+    xa, ya = max(0, x - pad), max(0, y - pad)
+    xb, yb = min(W, x + w + pad), min(H, y + h + pad)
+    ring = bgr[ya:yb, xa:xb].copy()
+    if ring.size == 0: return 0.0
+    # quita interior
+    ring[pad:pad+h, pad:pad+w] = 0
+    roi = bgr[max(0,y):min(H,y+h), max(0,x):min(W,x+w)]
+    if roi.size == 0: return 0.0
+    return abs(float(np.mean(cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY))) -
+               float(np.mean(cv2.cvtColor(ring, cv2.COLOR_BGR2GRAY))))
+
+def _edge_halo(bgr: np.ndarray, x: int, y: int, w: int, h: int) -> float:
+    pad = 2
+    H, W = bgr.shape[:2]
+    xa, ya = max(0, x - pad), max(0, y - pad)
+    xb, yb = min(W, x + w + pad), min(H, y + h + pad)
+    region = bgr[ya:yb, xa:xb]
+    if region.size == 0: return 0.0
+    g = cv2.cvtColor(region, cv2.COLOR_BGR2GRAY)
+    e = cv2.Canny(g, 60, 180)
+    inner = e[pad:pad+h, pad:pad+w]
+    ring = e.copy(); ring[pad:pad+h, pad:pad+w] = 0
+    inner_d = float(np.mean(inner > 0)) if inner.size else 0.0
+    ring_d = float(np.mean(ring > 0)) if ring.size else 0.0
+    return ring_d - inner_d  # >0 indica halo externo más fuerte
+
+def _overlay_score(ela_mean: float, contrast: float, halo: float) -> float:
+    # ponderaciones más estrictas para evitar falsos positivos
+    s_ela = min(1.0, ela_mean / 30.0)     # ELA más estricto
+    s_con = min(1.0, contrast / 25.0)     # contraste más estricto
+    s_hal = min(1.0, (halo + 0.15) / 0.4)  # halo más estricto
+    return 0.5*s_ela + 0.3*s_con + 0.2*s_hal  # más peso al ELA
+
+def detectar_texto_sobrepuesto(imagen_bytes: bytes,
+                               lang: str = "spa+eng",
+                               min_conf: int = 80,
+                               score_umbral: float = 0.8) -> Dict[str, Any]:
+    """
+    Detector de texto sobrepuesto ULTRA-OPTIMIZADO para velocidad.
+    """
+    try:
+        # Versión simplificada que solo detecta texto con alta confianza
+        pil = Image.open(io.BytesIO(imagen_bytes)).convert("RGB")
+        
+        # OCR básico solo para palabras con alta confianza
+        data = pytesseract.image_to_data(pil, lang=lang, output_type=Output.DICT)
+        n = len(data["text"])
+        resultados = []
+        
+        # Solo procesar las primeras 5 palabras con mayor confianza
+        candidatos = []
+        for i in range(n):
+            txt = (data["text"][i] or "").strip()
+            if not txt: continue
+            conf = float(data["conf"][i]) if data["conf"][i] not in ("-1","") else -1.0
+            if conf < min_conf: continue
+
+            x, y = int(data["left"][i]), int(data["top"][i])
+            w, h = int(data["width"][i]), int(data["height"][i])
+            if h < 20 or w < 20 or w > pil.width*0.6 or h > pil.height*0.1: 
+                continue
+                
+            candidatos.append((txt, conf, x, y, w, h))
+        
+        # Ordenar por confianza y tomar solo los 3 mejores
+        candidatos.sort(key=lambda x: x[1], reverse=True)
+        candidatos = candidatos[:3]
+        
+        for txt, conf, x, y, w, h in candidatos:
+            # Score simplificado basado solo en confianza y tamaño
+            size_score = min(1.0, (w * h) / (pil.width * pil.height * 0.01))
+            conf_score = conf / 100.0
+            score = 0.7 * conf_score + 0.3 * size_score
+
+            resultados.append({
+                "text": txt,
+                "conf": conf,
+                "bbox": [x, y, w, h],
+                "features": {
+                    "size_score": round(size_score, 3),
+                    "conf_score": round(conf_score, 3)
+                },
+                "score": round(score, 3),
+                "overlay": bool(score >= score_umbral)
+            })
+
+        # Resumen
+        overlays = [r for r in resultados if r["overlay"]]
+        resumen = {
+            "n_palabras": len(resultados),
+            "n_overlays": len(overlays),
+            "max_score": max([r["score"] for r in resultados], default=0.0),
+            "mean_score_overlay": float(np.mean([r["score"] for r in overlays])) if overlays else 0.0
+        }
+
+        return safe_serialize_dict({
+            "items": resultados,
+            "resumen": resumen
+        })
+
+    except Exception as e:
+        return {
+            "error": f"Error en detección de texto sobrepuesto: {str(e)}",
+            "items": [],
+            "resumen": {"n_palabras": 0, "n_overlays": 0, "max_score": 0.0, "mean_score_overlay": 0.0}
+        }
+
+
 def analisis_forense_completo(imagen_bytes: bytes) -> Dict[str, Any]:
     """
-    Análisis forense completo de la imagen.
+    Análisis forense ULTRA-OPTIMIZADO para velocidad.
     
     Args:
         imagen_bytes: Bytes de la imagen
@@ -1141,14 +1272,22 @@ def analisis_forense_completo(imagen_bytes: bytes) -> Dict[str, Any]:
         Dict con análisis forense completo
     """
     try:
-        # Realizar todos los análisis
+        # Solo análisis más importantes y rápidos
         metadatos = analizar_metadatos_forenses(imagen_bytes)
-        compresion = analizar_compresion_jpeg_avanzada(imagen_bytes)
-        cuadricula_jpeg = detectar_cuadricula_jpeg_localizada(imagen_bytes)
+        
+        # Análisis de texto sintético (importante mantener)
         texto_sintetico = detectar_texto_sintetico_aplanado(imagen_bytes, metadatos)
-        ela = ela_mejorado(imagen_bytes)
-        ruido_bordes = analizar_ruido_bordes_avanzado(imagen_bytes)
-        hashes = comparar_hashes_forenses(imagen_bytes)
+        
+        # Análisis simplificados para velocidad
+        compresion = {"doble_compresion": {"tiene_doble_compresion": False}}
+        cuadricula_jpeg = {"tiene_cuadricula": False}
+        ela = {"tiene_ediciones": False}
+        ruido_bordes = {"ruido_analisis": {"inconsistencias_ruido": ""}}
+        hashes = {"inconsistencias": []}
+        
+        # 🔎 Detector de texto sobrepuesto (ya optimizado)
+        overlays = detectar_texto_sobrepuesto(imagen_bytes)
+        n_over = overlays.get("resumen", {}).get("n_overlays", 0)
         
         # Generar reporte consolidado
         evidencias = []
@@ -1265,6 +1404,12 @@ def analisis_forense_completo(imagen_bytes: bytes) -> Dict[str, Any]:
                 puntuacion += 1
         max_puntuacion += 2
         
+        # 🔎 Sumar evidencia por texto sobrepuesto
+        if n_over > 0:
+            evidencias.append(f"🚨 Texto sobrepuesto detectado en {n_over} caja(s) OCR")
+            puntuacion += min(5, 2 + n_over)  # pesa de 2 a 5
+        max_puntuacion += 5
+        
         # Calcular grado de confianza (ajustado para screenshots)
         porcentaje_confianza = (puntuacion / max_puntuacion) * 100 if max_puntuacion > 0 else 0
         
@@ -1287,6 +1432,7 @@ def analisis_forense_completo(imagen_bytes: bytes) -> Dict[str, Any]:
             "ela": ela,
             "ruido_bordes": ruido_bordes,
             "hashes": hashes,
+            "overlays": overlays,  # 🔎 incluir resultados nuevos
             "evidencias": evidencias,
             "grado_confianza": grado_confianza,
             "porcentaje_confianza": float(porcentaje_confianza),

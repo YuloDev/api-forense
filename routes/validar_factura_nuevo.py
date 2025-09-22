@@ -2,16 +2,14 @@
 # -*- coding: utf-8 -*-
 
 """
-Endpoint corregido para validar facturas PDF
+Endpoint NUEVO para validar facturas PDF - Versión simplificada
 """
 
 import os
 import sys
 import base64
-import io
 import tempfile
 import time
-from typing import Dict, Any, Optional
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -28,13 +26,13 @@ router = APIRouter()
 class PeticionFactura(BaseModel):
     pdfbase64: str
 
-@router.post("/validar-factura")
-async def validar_factura(req: PeticionFactura) -> JSONResponse:
+@router.post("/validar-factura-nuevo")
+async def validar_factura_nuevo(req: PeticionFactura) -> JSONResponse:
     """
-    Valida una factura PDF usando análisis inteligente
+    Valida una factura PDF usando análisis inteligente - VERSIÓN NUEVA
     """
     try:
-        print(f"🔍 Iniciando validación de factura...")
+        print(f"🔍 [NUEVO] Iniciando validación de factura...")
         
         # Decodificar base64
         try:
@@ -42,7 +40,7 @@ async def validar_factura(req: PeticionFactura) -> JSONResponse:
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Error decodificando base64: {str(e)}")
         
-        print(f"✅ PDF decodificado: {len(archivo_bytes)} bytes")
+        print(f"✅ [NUEVO] PDF decodificado: {len(archivo_bytes)} bytes")
         
         # Crear archivo temporal
         with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
@@ -51,25 +49,25 @@ async def validar_factura(req: PeticionFactura) -> JSONResponse:
         
         try:
             # 1. Análisis PDF con OCR
-            print(f"🔍 Analizando PDF con OCR...")
+            print(f"🔍 [NUEVO] Analizando PDF con OCR...")
             t0 = time.perf_counter()
             
             factura_data = extraer_datos_factura_pdf(archivo_bytes)
             
             t1 = time.perf_counter()
-            print(f"✅ Análisis PDF completado en {t1-t0:.2f}s")
+            print(f"✅ [NUEVO] Análisis PDF completado en {t1-t0:.2f}s")
             print(f"   RUC: {factura_data.get('ruc', 'No encontrado')}")
             print(f"   Clave Acceso: {factura_data.get('claveAcceso', 'No encontrado')}")
             print(f"   Total: {factura_data.get('total', 'No encontrado')}")
             
             # 2. Validación SRI
-            print(f"🔍 Validando SRI...")
+            print(f"🔍 [NUEVO] Validando SRI...")
             t0 = time.perf_counter()
             
             factura_con_sri = integrar_validacion_sri(factura_data)
             
             t1 = time.perf_counter()
-            print(f"✅ Validación SRI completada en {t1-t0:.2f}s")
+            print(f"✅ [NUEVO] Validación SRI completada en {t1-t0:.2f}s")
             
             # Extraer resultados de la validación SRI
             sri_verificado = factura_con_sri.get("sri_verificado", False)
@@ -79,7 +77,7 @@ async def validar_factura(req: PeticionFactura) -> JSONResponse:
             print(f"   Mensaje: {mensaje_sri}")
             
             # 3. Evaluación de Riesgo
-            print(f"🔍 Evaluando riesgo...")
+            print(f"🔍 [NUEVO] Evaluando riesgo...")
             t0 = time.perf_counter()
             
             riesgo_result = evaluar_riesgo_factura(
@@ -90,7 +88,7 @@ async def validar_factura(req: PeticionFactura) -> JSONResponse:
             )
             
             t1 = time.perf_counter()
-            print(f"✅ Evaluación de riesgo completada en {t1-t0:.2f}s")
+            print(f"✅ [NUEVO] Evaluación de riesgo completada en {t1-t0:.2f}s")
             
             # 4. Función para limpiar datos JSON
             def clean_for_json(obj):
@@ -114,7 +112,7 @@ async def validar_factura(req: PeticionFactura) -> JSONResponse:
             riesgo_result_clean = clean_for_json(riesgo_result)
             
             # 6. Construir respuesta
-            print(f"🔍 Construyendo respuesta...")
+            print(f"🔍 [NUEVO] Construyendo respuesta...")
             
             response = {
                 "sri_verificado": sri_verificado,
@@ -161,7 +159,7 @@ async def validar_factura(req: PeticionFactura) -> JSONResponse:
                 }
             }
             
-            print(f"✅ Respuesta construida correctamente")
+            print(f"✅ [NUEVO] Respuesta construida correctamente")
             print(f"   Claves en respuesta: {list(response.keys())}")
             print(f"   Sección 'factura' presente: {'factura' in response}")
             
@@ -183,7 +181,7 @@ async def validar_factura(req: PeticionFactura) -> JSONResponse:
                 pass
                 
     except Exception as e:
-        print(f"❌ Error en validar_factura: {e}")
+        print(f"❌ [NUEVO] Error en validar_factura: {e}")
         import traceback
         print(f"   Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Error procesando PDF: {str(e)}")

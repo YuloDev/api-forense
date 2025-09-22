@@ -7,7 +7,7 @@ import pytesseract
 from pyzbar.pyzbar import decode as zbar_decode
 
 # --- (Windows) descomenta si no está en PATH ---
-# pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
 # ========== OCR helpers ==========
 def render_page_image(page, dpi=300) -> Image.Image:

@@ -187,3 +187,4 @@ async def validar_factura(req: PeticionFactura) -> JSONResponse:
         import traceback
         print(f"   Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Error procesando PDF: {str(e)}")
+

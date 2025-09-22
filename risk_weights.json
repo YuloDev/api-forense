@@ -20,15 +20,18 @@
   "extraccion_texto_ocr": 30,
   "campos_criticos_factura": 40,
   "clave_acceso_sri": 20,
-  "doble_compresion_detectada": 15,
-  "inconsistencias_ruido_bordes": 18,
-  "analisis_ela_sospechoso": 12,
-  "analisis_phash_sospechoso": 10,
+  "doble_compresion_detectada": 5,
+  "inconsistencias_ruido_bordes": 5,
+  "analisis_ela_sospechoso": 5,
+  "analisis_phash_sospechoso": 5,
   "analisis_ssim_sospechoso": 8,
   "metadatos_sospechosos": 5,
   "texto_superpuesto": 25,
   "capas_ocultas": 20,
   "evidencias_forenses": 15,
   "inconsistencia_financiera_items_subtotal": 25,
-  "inconsistencia_financiera_total_recompuesto": 30
+  "inconsistencia_financiera_total_recompuesto": 30,
+  "categoria_primaria_max": 5,
+  "categoria_secundaria_max": 5,
+  "categoria_adicional_max": 5
 }

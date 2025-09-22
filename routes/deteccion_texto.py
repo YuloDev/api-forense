@@ -103,56 +103,66 @@ async def detectar_texto_superpuesto_universal(request: ArchivoRequest):
             nivel_riesgo = resumen.get("risk_level", "UNKNOWN")
             
         else:
-            # Análisis de imagen básico
-            analisis_detallado = analizar_imagen_completa(request.archivo_base64)
+            # Solo análisis forense profesional
+            imagen_bytes = base64.b64decode(request.archivo_base64)
             
-            if "error" in analisis_detallado:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Error analizando imagen: {analisis_detallado['error']}"
-                )
+            # Convertir imagen a JPEG si no es JPEG/JPG para análisis forense
+            imagen_bytes_jpeg = imagen_bytes
+            if not tipo_archivo in ["JPEG", "JPG"]:
+                try:
+                    from PIL import Image
+                    import io
+                    
+                    # Abrir imagen original
+                    img_original = Image.open(io.BytesIO(imagen_bytes))
+                    
+                    # Convertir a RGB si es necesario
+                    if img_original.mode not in ("RGB", "L"):
+                        img_original = img_original.convert("RGB")
+                    
+                    # Convertir a JPEG con calidad 95
+                    jpeg_buffer = io.BytesIO()
+                    img_original.save(jpeg_buffer, format="JPEG", quality=95, optimize=True)
+                    imagen_bytes_jpeg = jpeg_buffer.getvalue()
+                    
+                    print(f"Imagen convertida a JPEG para análisis forense. Tamaño original: {len(imagen_bytes)} bytes, JPEG: {len(imagen_bytes_jpeg)} bytes")
+                    
+                except Exception as e:
+                    print(f"Error convirtiendo imagen a JPEG: {e}")
+                    # Usar imagen original si falla la conversión
+                    imagen_bytes_jpeg = imagen_bytes
             
-            # Análisis forense profesional adicional
+            # Análisis forense profesional
             try:
-                imagen_bytes = base64.b64decode(request.archivo_base64)
-                analisis_forense_profesional = analisis_forense_completo(imagen_bytes)
-                
-                # Integrar análisis forense profesional en el análisis detallado
-                analisis_detallado["analisis_forense_profesional"] = analisis_forense_profesional
-                
-                # Actualizar probabilidad de manipulación basada en análisis profesional
-                if analisis_forense_profesional.get("grado_confianza") == "ALTO":
-                    analisis_detallado["probabilidad_manipulacion"] = max(
-                        analisis_detallado.get("probabilidad_manipulacion", 0.0),
-                        0.8
-                    )
-                elif analisis_forense_profesional.get("grado_confianza") == "MEDIO":
-                    analisis_detallado["probabilidad_manipulacion"] = max(
-                        analisis_detallado.get("probabilidad_manipulacion", 0.0),
-                        0.5
-                    )
-                
-                # Agregar evidencias profesionales a los indicadores sospechosos
-                evidencias_profesionales = analisis_forense_profesional.get("evidencias", [])
-                if evidencias_profesionales:
-                    if "indicadores_sospechosos" not in analisis_detallado:
-                        analisis_detallado["indicadores_sospechosos"] = []
-                    analisis_detallado["indicadores_sospechosos"].extend(evidencias_profesionales)
+                from helpers.analisis_forense_profesional import analisis_forense_completo as analisis_forense_profesional
+                analisis_forense_profesional = analisis_forense_profesional(imagen_bytes)
                 
             except Exception as e:
-                # Si falla el análisis profesional, continuar con el básico
-                analisis_detallado["analisis_forense_profesional"] = {
-                    "error": f"Error en análisis forense profesional: {str(e)}"
-                }
+                # Si falla el análisis profesional, devolver error
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Error en análisis forense profesional: {str(e)}"
+                )
             
-            # Generar reporte para imagen
-            reporte_texto = _generar_reporte_imagen(analisis_detallado)
+            # Crear respuesta simplificada solo con análisis forense profesional
+            analisis_detallado = {
+                "analisis_forense_profesional": analisis_forense_profesional
+            }
+            
+            # Generar reporte simple
+            reporte_texto = f"Análisis forense profesional completado para {tipo_archivo}"
             xml_estructura = None
             
-            # Extraer resumen
-            probabilidad = analisis_detallado.get("probabilidad_manipulacion", 0.0)
-            nivel_riesgo = analisis_detallado.get("nivel_riesgo", "UNKNOWN")
-            resumen = analisis_detallado.get("resumen", {})
+            # Resumen simple
+            probabilidad = 0.5 if analisis_forense_profesional.get("grado_confianza") in ["ALTO", "MEDIO"] else 0.1
+            nivel_riesgo = "HIGH" if analisis_forense_profesional.get("grado_confianza") == "ALTO" else "MEDIUM" if analisis_forense_profesional.get("grado_confianza") == "MEDIO" else "LOW"
+            resumen = {
+                "probabilidad_manipulacion": probabilidad,
+                "nivel_riesgo": nivel_riesgo,
+                "grado_confianza": analisis_forense_profesional.get("grado_confianza", "BAJO"),
+                "porcentaje_confianza": analisis_forense_profesional.get("porcentaje_confianza", 0),
+                "evidencias": analisis_forense_profesional.get("evidencias", [])
+            }
         
         return TextoSuperpuestoResponse(
             success=True,

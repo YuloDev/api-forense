@@ -1,3 +1,7 @@
+# Configurar Tesseract ANTES de importar cualquier módulo
+import pytesseract
+pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+
 from app import app
 import uvicorn
 

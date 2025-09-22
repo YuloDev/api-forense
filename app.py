@@ -1,6 +1,10 @@
+# Configurar Tesseract ANTES de importar cualquier módulo
+import pytesseract
+pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routes import health, validar, validar_documento, config, risk_levels, alineacion, reclamos, deteccion_texto, validacion_firma_universal, validar_imagen, validar_factura
+from routes import health, validar, validar_documento, config, risk_levels, alineacion, reclamos, deteccion_texto, validacion_firma_universal, validar_imagen, validar_factura, validar_factura_fast, validar_factura_nuevo
  
 app = FastAPI(
     title="Validador SRI + OCR + Comparación productos + Riesgo",
@@ -42,5 +46,7 @@ app.include_router(deteccion_texto.router)
 app.include_router(validacion_firma_universal.router)
 app.include_router(validar_imagen.router)
 app.include_router(validar_factura.router)
+app.include_router(validar_factura_fast.router)
+app.include_router(validar_factura_nuevo.router)
  
  

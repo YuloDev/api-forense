@@ -153,5 +153,20 @@
     "valor": 30,
     "descripcion": "Inconsistencia entre total recompuesto y total declarado",
     "explicacion": "El total calculado (subtotal + impuestos - descuentos) debe coincidir con el total declarado. Una diferencia indica manipulación financiera."
+  },
+  "categoria_primaria_max": {
+    "valor": 5,
+    "descripcion": "Penalización máxima para categoría Primaria",
+    "explicacion": "Límite superior de puntos de penalización para elementos de alta prioridad en el análisis forense."
+  },
+  "categoria_secundaria_max": {
+    "valor": 5,
+    "descripcion": "Penalización máxima para categoría Secundaria",
+    "explicacion": "Límite superior de puntos de penalización para elementos de prioridad media en el análisis forense."
+  },
+  "categoria_adicional_max": {
+    "valor": 5,
+    "descripcion": "Penalización máxima para categoría Adicional",
+    "explicacion": "Límite superior de puntos de penalización para elementos de prioridad baja en el análisis forense."
   }
 }

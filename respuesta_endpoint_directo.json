@@ -1,0 +1,247 @@
+{
+  "sri_verificado": true,
+  "mensaje": "Factura validada exitosamente con SRI",
+  "tipo_archivo": "PDF",
+  "coincidencia": "si",
+  "diferencias": {},
+  "diferenciasProductos": [],
+  "resumenProductos": {
+    "num_sri": 0,
+    "num_imagen": 0,
+    "total_sri_items": 0,
+    "total_imagen_items": 0
+  },
+  "factura": {
+    "ruc": "0190316564001",
+    "razonSocial": null,
+    "fechaEmision": null,
+    "importeTotal": 1631.46,
+    "claveAcceso": "1504202501019031656400120012090000216900002169012",
+    "detalles": [],
+    "totals": {
+      "subtotal15": null,
+      "subtotal0": null,
+      "subtotal_no_objeto": null,
+      "subtotal_sin_impuestos": null,
+      "descuento": null,
+      "iva15": null,
+      "total": 1631.46
+    },
+    "barcodes": [],
+    "financial_checks": {},
+    "metadata": {
+      "invoice_number": null,
+      "authorization": "1504202501019031656400120012090000216900002169012",
+      "environment": "PRUEBAS",
+      "buyer_id": null,
+      "emitter_name": null,
+      "file_metadata": {
+        "sha256": null,
+        "pages_processed": 1,
+        "text_methods": [
+          "ocr_robusto"
+        ],
+        "text_length": 10665,
+        "fuente_barcode": false
+      }
+    },
+    "validacion_sri": {
+      "valido": true,
+      "clave_acceso": "1504202501019031656400120012090000216900002169012",
+      "componentes": {
+        "fecha_emision": "1504-20-25",
+        "ruc_emisor": "0101903165640",
+        "tipo_comprobante": "01",
+        "serie": "200",
+        "secuencial": "120900002",
+        "tipo_emision": "1",
+        "codigo_numerico": "69000021",
+        "digito_verificador": "6"
+      },
+      "consulta_sri": {
+        "valido": true,
+        "estado": "AUTORIZADO",
+        "fecha_autorizacion": "2025-07-08T19:58:13",
+        "ambiente": "PRODUCCION",
+        "mensaje": "Documento válido según SRI",
+        "detalles": {
+          "ruc_emisor": "0190316564001",
+          "numero_documento": null,
+          "clave_acceso": "1504202501019031656400120012090000216900002169012",
+          "fecha_consulta": "2025-09-21T12:42:33.885627"
+        }
+      },
+      "timestamp": "2025-09-21T12:42:33.885653"
+    },
+    "sri_verificado": true,
+    "mensaje": "Factura validada exitosamente con SRI"
+  },
+  "clave_acceso_parseada": {},
+  "riesgo": {
+    "nivel_riesgo": "BAJO",
+    "puntuacion": 0,
+    "grado_confianza": "ALTO",
+    "porcentaje_confianza": 100.0
+  },
+  "validacion_firmas": {
+    "resumen": {
+      "total_firmas": 0,
+      "firmas_validas": 0,
+      "firmas_invalidas": 0,
+      "con_certificados": 0,
+      "con_timestamps": 0,
+      "con_politicas": 0,
+      "porcentaje_validas": 0
+    },
+    "dependencias": {
+      "asn1crypto": false,
+      "oscrypto": false,
+      "certvalidator": false
+    },
+    "analisis_sri": {
+      "es_documento_sri": true,
+      "clave_acceso": "1504202501019031656400120012090000216900002169012",
+      "clave_valida": true,
+      "longitud_correcta": true,
+      "metodo_extraccion": "robusto_ocr",
+      "fuente_barcode": false,
+      "claves_barcode": []
+    },
+    "validacion_pdf": {
+      "firma_detectada": false,
+      "tipo_firma": "ninguna",
+      "es_pades": false,
+      "metadatos": {
+        "numero_firmas": 0
+      }
+    },
+    "tipo_documento": "pdf",
+    "firma_detectada": false
+  },
+  "analisis_detallado": {
+    "tipo_archivo": {
+      "tipo": "PDF",
+      "extension": "pdf",
+      "mime_type": "application/pdf",
+      "valido": true
+    },
+    "metadatos": {
+      "exif": {},
+      "iptc": {},
+      "xmp": {},
+      "basicos": {
+        "formato": "PDF",
+        "modo": "nativo/escaneado",
+        "tamaño": [
+          0,
+          0
+        ],
+        "ancho": 0,
+        "alto": 0,
+        "has_transparency": false
+      },
+      "sospechosos": []
+    },
+    "capas": {},
+    "superposicion_texto": {},
+    "analisis_forense": {
+      "hashes": {
+        "md5": null,
+        "sha1": null,
+        "sha256": null,
+        "sha512": null,
+        "blake2b": null,
+        "timestamp": null,
+        "phash": null,
+        "dhash": null,
+        "whash": null,
+        "colorhash": null,
+        "crop_resistant_hash": null
+      },
+      "timestamp_analisis": null,
+      "tipo_archivo": "PDF",
+      "ela": {
+        "ela_mean": 0.0,
+        "ela_std": 0.0,
+        "ela_max": 0,
+        "porcentaje_sospechoso": 0.0,
+        "edge_density": 0.0,
+        "tiene_ediciones": false,
+        "nivel_sospecha": "NORMAL"
+      },
+      "doble_compresion": {
+        "tiene_doble_compresion": false,
+        "periodicidad_detectada": false,
+        "varianza_alta": false,
+        "num_peaks": 0,
+        "ac_variance": 0.0,
+        "dc_variance": 0.0,
+        "confianza": "BAJA"
+      },
+      "ruido_bordes": {
+        "laplacian_variance": 0.0,
+        "edge_density": 0.0,
+        "num_lines": 0,
+        "parallel_lines": 0,
+        "outlier_ratio": 0.0,
+        "gradient_peaks": 0,
+        "peak_ratio": 0.0,
+        "tiene_edicion_local": false,
+        "nivel_sospecha": "BAJO"
+      },
+      "phash_bloques": {
+        "num_bloques": 0,
+        "mean_difference": 0.0,
+        "std_difference": 0.0,
+        "max_difference": 0,
+        "outlier_ratio": 0.0,
+        "tiene_diferencias_locales": false,
+        "nivel_sospecha": "BAJO"
+      },
+      "ssim_regional": {
+        "num_comparaciones": 0,
+        "mean_ssim": 0.0,
+        "std_ssim": 0.0,
+        "min_ssim": 0.0,
+        "low_similarity_ratio": 0.0,
+        "tiene_inconsistencias": false,
+        "nivel_sospecha": "BAJO"
+      },
+      "grado_confianza": {
+        "grado_confianza": "ALTO",
+        "porcentaje_confianza": 100.0,
+        "puntuacion": 0,
+        "max_puntuacion": 0,
+        "evidencias": [],
+        "justificacion": "PDF nativo - sin evidencia de manipulación",
+        "recomendacion": "DOCUMENTO APARENTEMENTE AUTÉNTICO"
+      }
+    },
+    "probabilidad_manipulacion": 0.0,
+    "nivel_riesgo": "LOW",
+    "indicadores_sospechosos": [],
+    "resumen": {
+      "tiene_metadatos_sospechosos": false,
+      "tiene_texto_superpuesto": false,
+      "tiene_capas_ocultas": false,
+      "tiene_evidencias_forenses": false,
+      "total_indicadores": 0
+    }
+  },
+  "texto_extraido": "RUC 0190316564001\nFACTURA\nNe 001-209-000021690\nNCMERO DE AUTORIZACION\n150420250 101903 16564001200 12000002 1690000216012\nFecha yhorade 1.047025 13:02:02\nAutorizacion\njente:. © PRODUCCION\nHOSPITAL DEL RIO HOSPIRIO SA Ambiente: PRODUCCIO\nEmisiéa: = NORMAL\nDir Matriz: AVE 24 DE MAYO Y LAS AMERICAS\nCLAVE DE ACCESO\nDir Secursal:\nCet. 2 DCCC\nOBLIGADO A LLEVAR CONTABILIDAD — SI 1$0430250101903165640012001 3SU0UU2 10002169012\nanclides Nombre: CONFIAMED SA Identificacion: 1792200979001\nFecha Emision: 15 '042025 Goia Remision:\nCédign Descripcion Cantidad Vator Descuento Subtotal\n£21026 FUNDA RECOLECTORA DE ORINA ADULTO . 1 0.70 0.00 0.70\nL-21083 BATA PACIENTE ADULTO DESCARTABLE . 1 1.08 00 tos\nL214? ELLCTRODOS ADULTOS REF:1700C-0S0 SE4422 . 3 0.21 @.00 tos\n1.21269 JALEA K-Y LUBRICANTE TUO X 100G. . 2 1131 0.00 236\n£21291 EQUIPO DE VENOCLSIS . 1 0.53 0.00 033\nL-21292 EQUIPO Y TUR PARA IRRIGACION REF 3014 . 1 8.96 0.00 £96\n127237 VICRYL PLUS 2-0 CT-1 (70CM) F.OB.GIN-CIRUGIA G . 1 $.08 0.00 5.08\nM-35221 EFEDRINA LIQUIDO PARENTERAL 60 MG-ML (EF EDRINA 1 0.66 0.00 0.66\n(210859 JERINGUILLA 10CC 21X12 . 3 0.12 0.00 0.36\n1.210566 JERINGUILLA $ CC . 2 0.08 0.00 0.16\n1210831 GORRO DE ENFERMERA. . 3 0.07 0.00 021\n210866 SABANA DE CAMILLA 1.0S X 2.20 . 1 1.32 0.00 132\n1.210868 ZAPATONES PAR DESCARTABLES . $ 0.31 0.00 15s\n211211 SPINOCAN 25G (0.53 X BEMM) BRAUN REF: 4505905 . 1 nas 0.00 re)\n(201273 INTROCAN N* 18 CANULA IV (POLY WIN) . 1 0.48 0.00 0.48\nL2ui3a7 CEPILLO QUIRLRGICO CON YODO REF: GW-1503 . 1 128 0.00 128\n1.212012 COMPRESA QUIRURGICA 45CM X 45CM ESTERIL PQT X . 2 222 0.00 5.04\n1.212037 GASA ESTERIL SOBRE (SUMINISTROS) . 2 0.10 0.00 0.20\n1212115 GUANTE QUIRURGICO N° 6.0 . 1 124 0.00 121\n[212123 GUANTE ANTIALERGICO N*7 . 2 1.0% 0.00 216\nL212128 GUANTE ANTIALLRGICO N* 7.5 . 2 1.08 0.00 216\n1212131 GUANTE ANTIALERGICO N* 6.5 . 1 1.08 0.00 tos\n1212139 GUANTES DE NITRILO MEDIUM . 40 0.06 0.00 0.60\n1212521 JERINGLILLA 2000 21X11 12 . 1 0.17 6.00 0.17\n1-212523 JERINGLILLA 3CC 23X1 14 BLISTER . 2 007 0.00 O14\n1.214788 MEDIAS ANTILMBOLICAS THROMBEX TALLA MEDIUM . 1 16.20 0.00 16.20\n1215642 LEUKOMLD LV. FILM HOSP. 70M X 90M CAJA X 50 R . 1 049 0.00 049\n1370810 AGUA PARA INYECCION LIQUIDO PARENTERAL [OML (A 1 0.52 0.00 052\nM-211361 POVIDONA SOLUCION YODADA X 100CC (INCODISA PAR 1 1.33 0.00 133\nM-350624 CEFAZOLINA SOLIDO PARENTERAL 1.Q0UMG (VITALIS) 2 1.38 0.00 276\nM-360110 DEXAMETASONA LIQUIDO PARENTERAL 4 MG.ML AMPOLL 2 0.36 0.00 0.72\nM-370821 COMBINACIONES (LACTATO DE RINGER) LIQUIDO PARE 1 1.86 0.00 136\nM-370833 CLORURO DE SODIO 0.9\"s X 100UML (16 UNIDADES) 2 1.50 6.00 3.00\nM-390110 LIDOCAINA SIN EPINEFRINA LIQUIDO PARENTERAL 2% 4 0.07 0.00 028\nM-390225 BUPIVACAINA HIPERBARICA LIQUIDO PARENTERAL 0,7 ! 5.28 0.00 $28\nM-390341 FENTANILO LIQUIDO PARENTERAL 0.05 MG'ML AMP X 1 265 0.00 265\nM-410289 ATROPINA LIQUIDO PARENTERAL [MG/ML AMP X IME ( 1 0.43 6.00 043\nS-HMO001 HONORARIOS MEDICOS CIRUJANO BARZALLO SALAZAR 1 10.50 0.00 10.50\nMARCO JOSE-DILATACION INSTRUMENTAL DEL CANAL\nCERVICAL (PROCEDIMILNTO SEPARADO).\nS-HM001 HONORARIOS MEDICOS CIRUJANO BARZALLO SALAZAR 1 199.50 0.00 199.50\nMARCO JOSE-HISTLROSCOPIA QUIRURGICA CON TOMA DE\nBIOPSIAS DE ENDOMETRIO YO POLIPECTOMIA CON O SIN DC\nCON RLMOCION DE LEIOMIOMA.\nS-HIMGOU2 HONORARIOS MEDICOS AYLDANTE GONZALEZ SERRANO 1 2.63 6.00 2.63\nPEDRO JOSE-DILATACION INSTRUMENTAL DEL CANAL\nCERVICAL (PROCEDIMILNTO SEPARADO).\nS-HMuOU2 HONORARIOS MEDICOS AYL DANTE GONZALEZ SERRANO 1 49.3% 0.00 49.88\nPEDRO JOSE-HISTLROSCOPIA QUIRURGICA CON TOMA DE\nBIOPSIAS DE EXDOMETRIO Y.0 POLIPECTOMIA CON O SIN DC\nCON REMOCION DE LEIOMIOMA.\nSHMoWD4 ==: HONORARIO MEDICOS ANESTESIOLOGO SALAMEA MOLINA 1 3.6% 0.00 3.68\nSANTIAGO RAFAEL-DILATACION INSTRUMENTAL DEL CANAL\n\nRUC 0190316564001\nFACTURA\nNe, 001-209-000021690\nNOMERO DE AUTORIZACION\n150420250101903 1656-400 | 200 | 20900002 16900002 169012\nFecha yhorade 15047025 13.02.02\nAutorizaciéo\nHOSPITAL DEL RIO HOSPIRIO SA Ambiente: PRODUCTION\nEnmisiéa: NORMAL\nDir Matriz: AVE 24 DE MAYO Y LAS AMERICAS\nCLAVE DE ACCESO\nDis Sucursal: q\nConnie. 3 ACUCINAAIN\nOBLIGADO A LLEVAR CONTABILIDAD — SI 1$043025010190316564001 200 | 209U0U2 1690002169012\nanalldes 5 Nombre: CONFAMED SA Bdentificaciém: 1792206979001\nFecha Emisiin: 15042025 Guia Remision:\nCédigo Deseripcion Cantidad Malor Descueato Subtotal\n121026 FUNDA RECOLECTORA DE ORINA ADULTO . t 0.70 0.00 0.70\n121083 BATA PACIENTE ADULTO DESCARTABLE , t 1.08 0.00 1.0%\n20147 ELECTRODOS ADULTOS REF:1700C-050 SE 4422 . $s 0.21 0.00 1.05\n1-21269 JALEA K-Y LUBRICANTE TUHO X 100G. . 2 1181 0.00 236\n121291 EQUIPO DE VENOCLISIS . I 0.53 0.00 0.53\n1-21292 EQUIPO Y TUR PARA IRRIGACION REF 3014 . t 8.96 0.00 8.96\n1-27237 VICRYL PLUS 2-0 CT-1 (70CM) F.OB.GIN-CIRUGIA G , t 5.08 0.00 $.08\nM-35221 LFEDRINA LIQUIDO PARLNTERAL 60 MG.-ML (EFLDRINA I 0.66 0.00 0.66\n1-210559 JERINGUILLA 10CC 21X1 12 . 3 0.12 0.00 036\n1-210566 JERINGUILLA 5 OC . 2 0.08 0.00 0.16\n1210831 GORRO DE ENFERMERA, , 3 0.07 0.00 021\n1-210%66 SABANA DE CAMILLA 1.05 X 2.20 . t 1.32 0.00 132\n1-210K68 ZAPATONES PAR DESCARTABLES, . $ 0.31 0.00 155\nL2u2u SPINOCAN 25G (0.53 X 83MM) BRAUN REF: 4805905 . t 13.88 0.00 Re\n1.211273 INTROCAN N* 18 CANULA IV (POLY WIN) . t 0.48 0.00 0.48\nL2U1347 CEPILLO QUIRURGICO CON YODO REF: GW-1503 . t 1.28 0.00 128\n1282012 COMPRESA QUIRURGICA 45CM X 45CM ESTERIL PQT X * 2 2R2 0.00 5.64\n1-212037 GASA ESTERIL SOBRE (SUMINISTROS) ° 2 0.10 0.00 020\n1242S GUANTE QUIRURGICO N* 6.0 . t 1.21 0.00 121\n1212123 GUANTE ANTIALERGICO N*7 . 2 1.08 0.00 216\n1282128 GUANTE ANTIALERGICO N* 7.5 * 2 1.08 0.00 216\n1262031 GUANTE ANTIALERGICO N\"6.5 . t 1.08 0.00 Los\n1212139 GUANTES DE NITRILO MEDIUM . 10 0.06 0.00 060\n1.212521 JERINGUULLA 20 OC 21X 112 . t 0.17 0.00 0.17\n1212523 JERINGUILLA 3CC 23X1 14 BLISTER * 2 0.07 0.00 0.14\n1-214788 MEDIAS ANTILMBOLICAS THROMBEX TALLA MEDIUM. . l 16.20 0.00 1620\n1-215642 LEUKOMED LV. FILM HOSP. 70M X 9CM CAJA X 50R . t 0.49 0.00 0.49\n1.370810 AGUA PARA INYLCCION LIQUIDO PARENTERAL JOML (A t 0.52 0.00 052\nM-211361 POVIDONA SOLUCION YODADA X 100CC (INCODISA PAR t 1.33 0.00 133\nM-350624 CEFAZOLINA SOLIDO PARENTERAL £.00UMG (VITALIS) 2 1.38 0.00 276\nM-360110 DEXAMETASONA LIQUIDO PARENTERAL 4 MG-ML AMPOLL 2 0.36 0.00 0.72\nM-370821 COMBINACIONES (LACTATO DE RINGER) LIQUIDO PARE U 1.86 0.00 1.86\nM-370833 CLORURO DE SODIO 0.9» X 1000ML (16 UNIDADES) ( 2 1.50 0.00 3.00\nM-390110 LIDOCAINA SIN EPINEFRINA LIQUIDO PARENTERAL 2% 4 0.07 0.00 0.28\nM-390225 BUPIVACAINA HIPERBARICA LIQUIDO PARENTERAL 0,7 t 5.28 0.00 528\nM-390341 FENTAMILO LIQUIDO PARENTERAL 0.05 MG'ML AMP X l 2.65 0.00 265\nM-410289 ATROPINA LIQUIDO PARENTERAL IMG’ML AMP X IML ( t 0.43 0.00 043\nS-HMoov1 HONORARIOS MEDICOS CIRUJANO BARZALLO SALAZAR t 10.50 0.00 10.80\nMARCO JOSE-DILATACION INSTRUMENTAL DEL CANAL\nCERVICAL (PROCEDIMIENTO SEPARADO).\nS-HMUOO! HONORARIOS MEDICOS CIRUJANO BARZALLO SALAZAR t 199.50 0.00 199.50\nMARCO JOSE-HISTEROSCOPIA QUIRURGICA CON TOMA DE\nBIOPSIAS DE ENDOMETRIO Y/O POLIPECTOMIA CON O SIN DC\nCON RLMOCION DE LEIOMIOMA.\nS-HMo002 HONORARIOS MEDICOS AYLDANTE GONZALEZ SERRANO Il 2.63 0.00 263\nPEDRO JOSE-DILATACION INSTRUMENTAL DEL CANAL\nCERVICAL (PROCEDIMIENTO SEPARADO}.\nS-HMUu002 HONORARIOS MEDICOS AYL DANTE GONZALEZ SERRANO t 49.88 0.00 49.88\nPEDRO JOSE-HISTLROSCOPIA QUIRURGICA CON TOMA DE\nBIOPSIAS DE EXDOMETRIO Y'O POLIPECTOMIA CON O SIN DC\nCON REMOCION DE LEIOMIOMA.\nS-HMo004 HONORARIO MEDICOS ANESTESIOLOGO SALAMEA MOLINA t 3.68 0.00 3.68\nSANTIAGO RAFAEL-DILATACION INSTRUMENTAL DEL CANAL\n\nRUC 0190316564001\nFACTURA\nNe. 001-209-000021690\nNOMERO DE AUTORIZACION\n150420250 101903 1656400 1200 120900002 16900002 169012\nFecha yborade —45.94-2005 13.02.02\nAnlorizacion\nAmbiente: © PRODUCCION\nHOSPITAL DEL RIO HOSPIRIO SA a :\nEmisioa: NORMAL\nDir Matriz: AVE 24 DE MAYO Y LAS AMERICAS\nCLAVE DE ACCESO\nDir Sucursal:\nOBLIGADO A LLEVAR CONTABILIDAD — SI 1504202501 01903 16563001200 1209000021 6900002 169012\nRazon Social / CONFIAMED SA\nApellides y Nombre: Wdentificaciom: 1792206979001\nFechs Emision: 15042025 Guia Remision:\nCadiga Descripcion Cantidad Valor Descuenta Sebtotal\nCERVICAL (PROCEDIMIENTO SEPARADO}.\nS-HMU004 HONORARIO MEDICOS ANESTESIOLOGO SALAMEA MOLINA ’ 69.83 0.00 9.83\nSANTIAGO RAFAEL-HISTLROSCOPLA QLIRURGICA CON TOMA\nDE BIOPSIAS DE ENDOMETRIO YO POLIPECTOMIA CON O SIN\nDC CON REMOCION DE LEIOMIOMA.\n12108175 MASCARILLA CON ELASTICO CAJA X 50* 5 0.05 0.00 0.25\nL2E219 CANULA NASAL DE OXIGENO ADULTO REF: 1003372002 ° 1! ig 0.00 119\n12012121 LLAVE DE 3 VIAS CON ALARGADERA REE. 1008-10 * 1 1.26 0.00 1.26\n1-2412122 LLAVE DE 3 VIAS DISCOFIX REF:10-220:1021 ° 1 0.4 0.00 094\n1-2112202 ANZAS DE RESECCION REFERENCIA: 1002 * t 720.00 0.00 720.00\n12130120 SONDA FOLEY 2V # 16 (GREETMED) * t 0.90 0.00 0.90\n12210459 PROTECTOR DE CAMA PRUDENTIAL X 10 UNIDADES HOS ° Al 5.76 0.00 058\nM3003 124 ONDANSETRON LIQLIDO PARENTERAL 2MG ML AMPOLLA 1 3.23 0.00 3.23\nM-3503198 OMEPRAZOL SOLIDO PARENTERAL IV 40 MG ’ 3.12 0.00 3.12\nM-3904 187 TRAMADOL LIQUIDO PARENTERAL SOMG-ML X 2ML (100 ’ 0.48 0.00 0.48\nM-3904277 KETOROLACO TROMETAMINA 30 MG'I ML (NOMAD 30) 2 1.33 0.00 2.66\n$-H100000 ADMINESTRACION DE MEDICAMENTOS l 36.00 7.20 28.80\nS-H100000 ADMINISTRACION DE MILDICAMENTOS 1 10.31 2.02 8.09\nS-PATOO24 BIOPSIA X 1 PIEZA t ato 442 37.08\nS-PATOOM BIOPSIA X 1 PLEZA t 420 412 37.08\n$-Q000033 MONITOR EN QUIROFANO POR MINUTO 15 0.52 0.00 39.00\n$-Q000034 OXIGENO POR LITROS - QUIROFANO 150 0.02 0.60 240\nS-Q000035 DERECHO DE ANESTESIA EN QUIROFANO POR MINUTO 78 0.52 0.00 39.00\nS-QU00067 DERECHO SALA DE QUIROFANO X MINUTO 45 1.70 13.50 63.00\nS-QODODKS OXIGENO POR UTROS - RECUPERACION 240 0.02 0.96 384\nS-Qov0i31 INSUMOS ASEPESIA Y ANTISEPSLA QUIROFANO. ’ 10.00 2.00 8.00\n$-Q000138 MONITOR EN RECUPERACION ' 10.00 2.00 8.00\nS-Qovors DERECHO SALA DE RECUPERACION PACIENTES AMBULAT l 45.00 9.00 36.00\n$-QOU0187 MANGAS NEUMATICAS (COMPRESOR SCD) MUSLO TALLA t 43.50 8.70 34.80\nS-QUL024 USO TORRE DE LAPAROSCOPIO 1! 75.00 15.00 60.00\nS-QOVO289 ENFERMERIA QUIROFANO 1 20.00 4.00 16.00\nS-Qo00270 CUIDADO Y MANEJO RESIDENTE QUIROFANO-AYUDANTEY 1 30.00 6.00 24.00\nInformacion Adicional Total sin Descucntos: 1631.46\n*, “ ic 2\nOlreccién: AV. REPUBLICA Y MARTIN CARRION, EDIFICIO BGR, PISO 9 Y (0. Descuentos: 7922\nSubtowal: 1602.24\nTeléfono: 3330705 Contaseda: HSMVMYIF Tanfa IVA OM: 810.32\nEmail: tnfoprestadoresia canfiamed.com, TanfalVA 15%: W192\nILC. #3546 Pacieate:KARSTE ABAD ANA CAROLINA ai 1879\ncs? 21690 VALOR TOTAL: 1,721.02\nDiagnéstico Presume POLIPO DE CULRPO DEL UTERO SON UN MIL SETECIENTOS VEINTE Y UN DOLARES\nDugndsuco Definiuvo CON DOS CENTAVOS\nRealiado por. BARRERA SUAREZ LILIANA CUMANDA\nForma de Pago\nOTROS CON UTILIZACION DEL SISTEMA FINANCIE 1,721.02\ninfoprestadores‘4 confiamed.com",
+  "parser_avanzado": {
+    "disponible": true,
+    "barcodes_detectados": 0,
+    "items_detectados": 0,
+    "validaciones_financieras": {},
+    "metadatos_avanzados": {
+      "pages_processed": 1,
+      "text_methods": [
+        "ocr_robusto"
+      ],
+      "text_length": 10665,
+      "access_key_found": true,
+      "barcodes_found": false
+    }
+  }
+}
