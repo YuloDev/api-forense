@@ -8,21 +8,13 @@ Script para configurar Tesseract globalmente para Linux (Docker/producción)
 import os
 import sys
 
-# Configurar Tesseract para Linux (Docker/producción)
-def configurar_tesseract():
-    """Configura Tesseract para Linux"""
-    try:
-        import pytesseract
-        
-        # Configurar para Linux
-        pytesseract.pytesseract.tesseract_cmd = 'tesseract'
-        print("✅ Tesseract configurado para Linux: tesseract")
-                
-    except Exception as e:
-        print(f"❌ Error configurando Tesseract: {e}")
-
-# Ejecutar configuración
-configurar_tesseract()
+# Configurar Tesseract ANTES de importar cualquier módulo que lo use
+try:
+    import pytesseract
+    pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
+    print("✅ Tesseract configurado globalmente para Linux: /usr/bin/tesseract")
+except Exception as e:
+    print(f"❌ Error configurando Tesseract: {e}")
 
 # Ahora importar y ejecutar el servidor
 if __name__ == "__main__":
