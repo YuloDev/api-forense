@@ -2,55 +2,21 @@
 # -*- coding: utf-8 -*-
 
 """
-Script para configurar Tesseract globalmente antes de importar otros módulos
+Script para configurar Tesseract globalmente para Linux (Docker/producción)
 """
 
 import os
 import sys
 
-# Configurar Tesseract ANTES de importar cualquier módulo que lo use
+# Configurar Tesseract para Linux (Docker/producción)
 def configurar_tesseract():
-    """Configura Tesseract para Windows (desarrollo) y Linux (Docker/producción)"""
+    """Configura Tesseract para Linux"""
     try:
         import pytesseract
-        import subprocess
         
-        if os.name == 'nt':  # Windows
-            tesseract_path = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-            tessdata_dir = r"C:\Program Files\Tesseract-OCR\tessdata"
-            
-            if os.path.exists(tesseract_path):
-                pytesseract.pytesseract.tesseract_cmd = tesseract_path
-                if os.path.exists(tessdata_dir):
-                    os.environ["TESSDATA_PREFIX"] = tessdata_dir
-                print(f"✅ Tesseract configurado para Windows: {tesseract_path}")
-                print(f"✅ TESSDATA_PREFIX configurado: {tessdata_dir}")
-            else:
-                print("⚠️ Tesseract no encontrado en Windows, usando configuración por defecto")
-        else:  # Linux (Docker/producción)
-            possible_paths = [
-                'tesseract',
-                '/usr/bin/tesseract',
-                '/usr/local/bin/tesseract',
-                '/opt/homebrew/bin/tesseract'  # macOS con Homebrew
-            ]
-            
-            tesseract_found = False
-            for path in possible_paths:
-                try:
-                    result = subprocess.run([path, '--version'], 
-                                          capture_output=True, text=True, timeout=5)
-                    if result.returncode == 0:
-                        pytesseract.pytesseract.tesseract_cmd = path
-                        print(f"✅ Tesseract configurado para Linux: {path}")
-                        tesseract_found = True
-                        break
-                except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-                    continue
-            
-            if not tesseract_found:
-                print("⚠️ Tesseract no encontrado en Linux, usando configuración por defecto")
-                pytesseract.pytesseract.tesseract_cmd = 'tesseract'
+        # Configurar para Linux
+        pytesseract.pytesseract.tesseract_cmd = 'tesseract'
+        print("✅ Tesseract configurado para Linux: tesseract")
                 
     except Exception as e:
         print(f"❌ Error configurando Tesseract: {e}")
