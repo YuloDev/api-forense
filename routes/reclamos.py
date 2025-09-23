@@ -129,7 +129,15 @@ def listar_reclamos(
         "total": total,
         "limit": limit,
         "offset": offset,
-        "metadatos": data["metadatos"]
+        "metadatos": data.get("metadatos", {
+            "total_reclamos": total,
+            "estados_disponibles": ["En Revisión", "Aprobado", "Rechazado"],
+            "configuracion_id": {
+                "prefijo": "CLM",
+                "formato": "CLM-{secuencial:000-000}",
+                "ejemplo": "CLM-000-001"
+            }
+        })
     }
 
 @router.get("/reclamos/{id_reclamo}")
