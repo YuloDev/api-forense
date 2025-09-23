@@ -23,40 +23,7 @@ DESCRIPTIONS_FILE = "risk_weights_descriptions.json"
 if os.path.exists(CONFIG_FILE):
     with open(CONFIG_FILE, "r", encoding="utf-8") as f:
         RISK_WEIGHTS = json.load(f)
-else:
-    RISK_WEIGHTS = {
-        "fecha_creacion_vs_emision": 15,
-        "fecha_mod_vs_creacion": 12,
-        "software_conocido": 12,
-        "num_paginas": 10,
-        "capas_multiples": 10,
-        "consistencia_fuentes": 8,
-        "dpi_uniforme": 8,
-        "compresion_estandar": 6,
-        "alineacion_texto": 6,
-        "anotaciones_o_formularios": 3,
-        "javascript_embebido": 2,
-        "archivos_incrustados": 3,
-        "firmas_pdf": -4,
-        "actualizaciones_incrementales": 3,
-        "cifrado_permisos_extra": 2,
-        "math_consistency": 10,
-        "sri_verificacion": 20,
-        "extraccion_texto_ocr": 30,
-        "campos_criticos_factura": 40,
-        "clave_acceso_sri": 20,
-        "doble_compresion_detectada": 15,
-        "inconsistencias_ruido_bordes": 18,
-        "analisis_ela_sospechoso": 12,
-        "analisis_phash_sospechoso": 10,
-        "analisis_ssim_sospechoso": 8,
-        "metadatos_sospechosos": 5,
-        "texto_superpuesto": 25,
-        "capas_ocultas": 20,
-        "evidencias_forenses": 15,
-        "inconsistencia_financiera_items_subtotal": 25,
-        "inconsistencia_financiera_total_recompuesto": 30,
-    }
+
 
 # Cargar descripciones de RISK_WEIGHTS
 if os.path.exists(DESCRIPTIONS_FILE):

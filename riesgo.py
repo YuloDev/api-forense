@@ -355,20 +355,21 @@ def _generate_capas_check_from_complete_response(capas_analisis_completo: Dict[s
     print(f"DEBUG: Nivel de riesgo final calculado: {nivel_riesgo}")
     
     # Calcular penalización basada en el nivel de riesgo del helper deteccion_texto_superpuesto
-    peso_base = RISK_WEIGHTS.get("capas_multiples", 5)  # Valor base de capas_multiples
+    peso_base = RISK_WEIGHTS.get("capas_multiples")  # Valor base de capas_multiples
     
     if nivel_riesgo == "HIGH":
         penalizacion = peso_base  # 100% del valor de capas_multiples
         print(f"DEBUG: Nivel de riesgo HIGH - Penalización completa: {penalizacion} puntos")
     elif nivel_riesgo == "MEDIUM":
-        penalizacion = peso_base // 2  # 50% del valor de capas_multiples
+        penalizacion = peso_base # 50% del valor de capas_multiples
         print(f"DEBUG: Nivel de riesgo MEDIUM - Penalización mitad: {penalizacion} puntos")
     else:  # LOW
         penalizacion = 0  # 0% - Sin penalización
         print(f"DEBUG: Nivel de riesgo LOW - Sin penalización: {penalizacion} puntos")
     
     # Generar explicación de penalización
-    penalty_explanation = f"Penalización basada en nivel de riesgo: {nivel_riesgo} - {penalizacion} puntos ({peso_base} base × {100 if nivel_riesgo == 'HIGH' else 50 if nivel_riesgo == 'MEDIUM' else 0}%)"
+    percentage = 100 if nivel_riesgo == 'HIGH' else 50 if nivel_riesgo == 'MEDIUM' else 0
+    penalty_explanation = f"Penalización basada en nivel de riesgo: {nivel_riesgo} - {penalizacion} puntos ({peso_base} base × {percentage}%)"
     
     # Generar resumen con la estructura exacta solicitada usando datos del resumen_general
     resumen = {
@@ -797,7 +798,7 @@ def evaluar_riesgo_con_xml_sri(pdf_bytes: bytes, fuente_texto: str, pdf_fields: 
     Versión de evaluar_riesgo que puede usar datos del XML del SRI para validación financiera más precisa.
     """
     # Simplemente llamamos a evaluar_riesgo pero actualizamos la validación financiera
-    base_result = evaluar_riesgo(pdf_bytes, fuente_texto, pdf_fields)
+    base_result = evaluar_riesgo(pdf_bytes, fuente_texto, pdf_fields, type="factura")
     
     # Si tenemos XML del SRI, re-ejecutamos solo la validación financiera con esos datos (DESHABILITADO)
     # if xml_sri and xml_sri.get("autorizado"):
@@ -824,7 +825,7 @@ def evaluar_riesgo_con_xml_sri(pdf_bytes: bytes, fuente_texto: str, pdf_fields: 
     return base_result
 
 
-def evaluar_riesgo(pdf_bytes: bytes, fuente_texto: str, pdf_fields: Dict[str, Any]) -> Dict[str, Any]:
+def evaluar_riesgo(pdf_bytes: bytes,fuente_texto: str,  pdf_fields: Dict[str, Any], type: str) -> Dict[str, Any]:
     """Calcula score y desglose de validaciones para el PDF."""
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     meta = doc.metadata or {}
@@ -886,7 +887,8 @@ def evaluar_riesgo(pdf_bytes: bytes, fuente_texto: str, pdf_fields: Dict[str, An
     }
 
     # --- fechas ---
-    fecha_emision = _parse_fecha_emision(pdf_fields.get("fechaEmision"))
+    if type == "factura":
+        fecha_emision = _parse_fecha_emision(pdf_fields.get("fechaEmision"))
     dt_cre = _pdf_date_to_dt(meta.get("creationDate") or meta.get("CreationDate"))
     dt_mod = _pdf_date_to_dt(meta.get("modDate") or meta.get("ModDate"))
 
@@ -968,12 +970,16 @@ def evaluar_riesgo(pdf_bytes: bytes, fuente_texto: str, pdf_fields: Dict[str, An
     # 1) Fecha creación vs fecha emisión
     penal = 0
     msg = "sin datos suficientes"
-    if fecha_emision and dt_cre:
-        dias = abs((dt_cre.date() - fecha_emision).days)
-        msg = f"{dias} día(s) entre creación PDF y emisión"
-        if dias >= 0 and dias <= 10:
-            penal = 0
+    if type == "factura":
+        if fecha_emision and dt_cre:
+            dias = abs((dt_cre.date() - fecha_emision).days)
+            msg = f"{dias} día(s) entre creación PDF y emisión"
+            if dias >= 0 and dias <= 10:
+                penal = 0
+            else:
+                penal = RISK_WEIGHTS["fecha_creacion_vs_emision"]
         else:
+            msg = "sin datos de fecha de emisión o creación"
             penal = RISK_WEIGHTS["fecha_creacion_vs_emision"]
     details_prior.append({"check": "Fecha de creación vs fecha de emisión", "detalle": msg, "penalizacion": penal})
     score += penal

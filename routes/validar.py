@@ -520,7 +520,7 @@ async def validar_factura(req: Peticion):
     fuente_texto = text if text and not is_scanned_image_pdf(archivo_bytes, text) else (ocr_text or text)
 
     # 4) extraer campos del PDF
-    pdf_fields = extract_invoice_fields_from_text(fuente_texto or "", clave)
+    pdf_fields = extract_invoice_fields_from_text(fuente_texto or "", clave,type="factura")
 
     # Si no hay clave válida → ejecutar riesgo con sri_ok=False
     if not etiqueta_encontrada or not clave or not re.fullmatch(r"\d{49}", str(clave)):

@@ -16,6 +16,26 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+# Configurar Tesseract ANTES de importar cualquier módulo que lo use
+try:
+    import pytesseract
+    import os
+    
+    # Configurar ruta de Tesseract
+    pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+    
+    # Configurar TESSDATA_PREFIX para que encuentre los archivos de idioma
+    tessdata_dir = r"C:\Program Files\Tesseract-OCR\tessdata"
+    if os.path.exists(tessdata_dir):
+        os.environ["TESSDATA_PREFIX"] = tessdata_dir
+        print(f"✅ Tesseract configurado globalmente en validar_factura")
+        print(f"✅ TESSDATA_PREFIX configurado: {tessdata_dir}")
+    else:
+        print(f"⚠️ Directorio tessdata no encontrado: {tessdata_dir}")
+        
+except Exception as e:
+    print(f"❌ Error configurando Tesseract: {e}")
+
 # Agregar el directorio raíz al path para importar módulos
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -53,6 +73,8 @@ async def validar_factura(req: PeticionFactura) -> JSONResponse:
             # 1. Análisis PDF con OCR
             print(f"🔍 Analizando PDF con OCR...")
             t0 = time.perf_counter()
+
+            typeDocumento = "factura"
             
             factura_data = extraer_datos_factura_pdf(archivo_bytes)
             
@@ -86,7 +108,8 @@ async def validar_factura(req: PeticionFactura) -> JSONResponse:
                 archivo_bytes, 
                 factura_data.get('texto_ocr', ''), 
                 factura_con_sri, 
-                factura_con_sri.get("sri_verificado", False)
+                factura_con_sri.get("sri_verificado", False),
+                type=typeDocumento
             )
             
             t1 = time.perf_counter()

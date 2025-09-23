@@ -2,104 +2,167 @@
 # -*- coding: utf-8 -*-
 
 """
-Script para verificar la configuración de Tesseract en el servidor
+Script para verificar que Tesseract esté funcionando correctamente en el servidor
 """
 
-import requests
-import json
-import base64
+# Configurar Tesseract ANTES de importar cualquier módulo
+import pytesseract
+pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
-def verificar_tesseract_servidor():
-    """Verifica la configuración de Tesseract en el servidor"""
+import sys
+import os
+import json
+from PIL import Image
+import numpy as np
+
+def verificar_tesseract():
+    """Verifica que Tesseract esté funcionando correctamente"""
     
-    print("🔍 VERIFICANDO TESSERACT EN EL SERVIDOR")
+    print("🔍 VERIFICANDO TESSERACT")
     print("=" * 50)
     
-    # Leer PDF de prueba
-    pdf_path = "helpers/IMG/Factura_imagen.pdf"
+    try:
+        # Verificar que pytesseract esté disponible
+        print("1. Verificando pytesseract...")
+        print(f"   ✅ pytesseract importado correctamente")
+        
+        # Verificar la ruta configurada
+        print("2. Verificando ruta de Tesseract...")
+        tesseract_cmd = pytesseract.pytesseract.tesseract_cmd
+        print(f"   Ruta configurada: {tesseract_cmd}")
+        
+        if os.path.exists(tesseract_cmd):
+            print(f"   ✅ Archivo encontrado en: {tesseract_cmd}")
+        else:
+            print(f"   ❌ Archivo NO encontrado en: {tesseract_cmd}")
+            return False
+        
+        # Verificar versión de Tesseract
+        print("3. Verificando versión de Tesseract...")
+        try:
+            version = pytesseract.get_tesseract_version()
+            print(f"   ✅ Versión de Tesseract: {version}")
+        except Exception as e:
+            print(f"   ❌ Error obteniendo versión: {e}")
+            return False
+        
+        # Crear una imagen de prueba simple
+        print("4. Creando imagen de prueba...")
+        img = Image.new('RGB', (200, 50), color='white')
+        
+        # Agregar texto simple a la imagen
+        from PIL import ImageDraw, ImageFont
+        draw = ImageDraw.Draw(img)
+        
+        # Intentar usar una fuente del sistema
+        try:
+            font = ImageFont.truetype("arial.ttf", 20)
+        except:
+            font = ImageFont.load_default()
+        
+        draw.text((10, 15), "TEST OCR 123", fill='black', font=font)
+        
+        print("   ✅ Imagen de prueba creada")
+        
+        # Probar OCR
+        print("5. Probando OCR...")
+        try:
+            text = pytesseract.image_to_string(img, lang='eng')
+            print(f"   ✅ OCR funcionando")
+            print(f"   Texto extraído: '{text.strip()}'")
+            
+            if "TEST" in text and "123" in text:
+                print("   ✅ OCR extrajo el texto correctamente")
+            else:
+                print("   ⚠️ OCR extrajo texto pero no es el esperado")
+                
+        except Exception as e:
+            print(f"   ❌ Error en OCR: {e}")
+            return False
+        
+        # Probar con configuración específica
+        print("6. Probando configuración específica...")
+        try:
+            config = "--oem 3 --psm 6"
+            text = pytesseract.image_to_string(img, lang='eng', config=config)
+            print(f"   ✅ OCR con configuración específica funcionando")
+            print(f"   Texto extraído: '{text.strip()}'")
+        except Exception as e:
+            print(f"   ❌ Error en OCR con configuración: {e}")
+            return False
+        
+        print("\n✅ TESSERACT FUNCIONANDO CORRECTAMENTE")
+        return True
+        
+    except Exception as e:
+        print(f"\n❌ ERROR VERIFICANDO TESSERACT: {e}")
+        return False
+
+def verificar_importaciones():
+    """Verifica que las importaciones necesarias funcionen"""
+    
+    print("\n🔍 VERIFICANDO IMPORTACIONES")
+    print("=" * 50)
     
     try:
-        with open(pdf_path, "rb") as f:
-            pdf_bytes = f.read()
+        # Verificar importaciones básicas
+        print("1. Verificando importaciones básicas...")
+        import fitz
+        print("   ✅ PyMuPDF (fitz) importado")
         
-        # Convertir a base64
-        pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
+        import cv2
+        print("   ✅ OpenCV importado")
         
-        print(f"✅ PDF leído: {len(pdf_bytes)} bytes")
+        import numpy as np
+        print("   ✅ NumPy importado")
         
-        # Preparar petición
-        payload = {"pdfbase64": pdf_base64}
+        from PIL import Image
+        print("   ✅ Pillow importado")
         
-        print("\n🚀 Enviando petición al servidor...")
+        # Verificar importaciones del proyecto
+        print("2. Verificando importaciones del proyecto...")
         
-        try:
-            response = requests.post(
-                "http://localhost:8001/validar-factura",
-                json=payload,
-                timeout=30
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                
-                print(f"\n📊 RESULTADO DEL SERVIDOR:")
-                print(f"   SRI Verificado: {data.get('sri_verificado', 'N/A')}")
-                print(f"   Mensaje: {data.get('mensaje', 'N/A')}")
-                
-                # Verificar si se extrajeron datos
-                factura = data.get('factura', {})
-                print(f"\n📋 DATOS EXTRAÍDOS:")
-                print(f"   RUC: {factura.get('ruc', 'N/A')}")
-                print(f"   Razón Social: {factura.get('razonSocial', 'N/A')}")
-                print(f"   Fecha Emisión: {factura.get('fechaEmision', 'N/A')}")
-                print(f"   Importe Total: {factura.get('total', 'N/A')}")
-                print(f"   Clave Acceso: {factura.get('claveAcceso', 'N/A')}")
-                
-                # Verificar si el OCR está funcionando
-                if factura.get('ruc') and factura.get('ruc') != 'N/A':
-                    print(f"\n✅ TESSERACT FUNCIONANDO CORRECTAMENTE")
-                    print(f"   OCR: ✅ Funcionando")
-                    print(f"   Extracción de datos: ✅ Funcionando")
-                else:
-                    print(f"\n❌ TESSERACT NO ESTÁ FUNCIONANDO")
-                    print(f"   OCR: ❌ No funcionando")
-                    print(f"   Extracción de datos: ❌ No funcionando")
-                    
-                    # Verificar el mensaje de error
-                    mensaje = data.get('mensaje', '')
-                    if 'No se pudo obtener una Clave de Acceso válida' in mensaje:
-                        print(f"\n🔍 DIAGNÓSTICO:")
-                        print(f"   El servidor no puede extraer la clave de acceso")
-                        print(f"   Esto indica que Tesseract no está funcionando")
-                        print(f"   Posible causa: Configuración de Tesseract incorrecta")
-                    elif 'El comprobante no está AUTORIZADO' in mensaje:
-                        print(f"\n🔍 DIAGNÓSTICO:")
-                        print(f"   El servidor extrajo la clave de acceso")
-                        print(f"   Pero la validación SRI falló")
-                        print(f"   Esto indica que Tesseract SÍ está funcionando")
-                
-                # Verificar riesgo
-                riesgo = data.get('riesgo', {})
-                print(f"\n⚠️ ANÁLISIS DE RIESGO:")
-                print(f"   Score: {riesgo.get('score', 'N/A')}")
-                print(f"   Nivel: {riesgo.get('nivel', 'N/A')}")
-                print(f"   Es Falso Probable: {riesgo.get('es_falso_probable', 'N/A')}")
-                
-            else:
-                print(f"❌ Error del servidor: {response.status_code}")
-                print(f"   Respuesta: {response.text}")
-                
-        except requests.exceptions.ConnectionError:
-            print(f"❌ Error de conexión: El servidor no está ejecutándose")
-        except requests.exceptions.Timeout:
-            print(f"❌ Timeout: El servidor tardó más de 30 segundos")
-        except Exception as e:
-            print(f"❌ Error: {e}")
-            
-    except FileNotFoundError:
-        print(f"❌ Archivo PDF no encontrado: {pdf_path}")
+        # Cambiar al directorio del proyecto
+        project_dir = os.path.dirname(os.path.abspath(__file__))
+        sys.path.insert(0, project_dir)
+        
+        from helpers.pdf_factura_parser import extraer_datos_factura_pdf
+        print("   ✅ pdf_factura_parser importado")
+        
+        print("\n✅ TODAS LAS IMPORTACIONES FUNCIONANDO")
+        return True
+        
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"\n❌ ERROR EN IMPORTACIONES: {e}")
+        return False
+
+def main():
+    """Función principal"""
+    
+    print("🚀 VERIFICACIÓN COMPLETA DEL SERVIDOR")
+    print("=" * 60)
+    
+    # Verificar Tesseract
+    tesseract_ok = verificar_tesseract()
+    
+    # Verificar importaciones
+    imports_ok = verificar_importaciones()
+    
+    # Resumen final
+    print("\n📊 RESUMEN FINAL")
+    print("=" * 60)
+    print(f"Tesseract: {'✅ OK' if tesseract_ok else '❌ ERROR'}")
+    print(f"Importaciones: {'✅ OK' if imports_ok else '❌ ERROR'}")
+    
+    if tesseract_ok and imports_ok:
+        print("\n🎉 SERVIDOR LISTO PARA FUNCIONAR")
+        print("   Puedes iniciar el servidor con: python start_server.py")
+    else:
+        print("\n⚠️ HAY PROBLEMAS QUE RESOLVER")
+        if not tesseract_ok:
+            print("   - Verifica que Tesseract esté instalado correctamente")
+        if not imports_ok:
+            print("   - Verifica que todas las dependencias estén instaladas")
 
 if __name__ == "__main__":
-    verificar_tesseract_servidor()
+    main()

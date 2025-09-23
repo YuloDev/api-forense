@@ -1012,11 +1012,11 @@ class TextOverlayDetector:
         nivel_riesgo = analisis_capas.get("nivel_riesgo", "LOW")
         
         # Calcular penalización dinámica según nivel de riesgo
-        peso_base = 10  # Valor base de capas_multiples
+        peso_base = RISK_WEIGHTS.get("capas_multiples")  # Valor base de capas_multiples
         if nivel_riesgo == "HIGH":
             penalizacion = peso_base  # Penalización completa
         elif nivel_riesgo == "MEDIUM":
-            penalizacion = peso_base // 2  # Mitad de la penalización
+            penalizacion = peso_base  # Mitad de la penalización
         else:  # LOW
             penalizacion = 0  # Sin penalización
         

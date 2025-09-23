@@ -89,6 +89,7 @@ def is_scanned_image_pdf(pdf_bytes: bytes, extracted_text: str) -> bool:
 @router.post("/validar-documento")
 async def validar_documento(req: PeticionDoc):
     t_all = time.perf_counter()
+    typeDocumento = "Documento";
 
     # 1) decode base64
     t0 = time.perf_counter()
@@ -115,11 +116,11 @@ async def validar_documento(req: PeticionDoc):
     fuente_texto = text if text and not is_scanned_image_pdf(pdf_bytes, text) else (ocr_text or text)
 
     # 4) extraer campos del PDF
-    pdf_fields = extract_invoice_fields_from_text(fuente_texto or "", clave)
+    pdf_fields = extract_invoice_fields_from_text(fuente_texto or "", clave, type=typeDocumento)
     pdf_fields_b64 = base64.b64encode(json.dumps(pdf_fields, ensure_ascii=False).encode("utf-8")).decode("utf-8")
 
     # 5) análisis de riesgo (sin SRI)
-    riesgo = evaluar_riesgo(pdf_bytes, fuente_texto or "", pdf_fields)
+    riesgo = evaluar_riesgo(pdf_bytes, fuente_texto or "", pdf_fields, type=typeDocumento)
 
     return JSONResponse(
         status_code=200,

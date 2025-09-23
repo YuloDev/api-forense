@@ -428,123 +428,130 @@ def extract_items_from_ocr_text(text: str) -> List[Dict[str, Any]]:
     print(f"DEBUG OCR: {len(items)} items extraídos exitosamente")
     return items
 
-def extract_invoice_fields_from_text(raw_text: str, clave_acceso: Optional[str]) -> Dict[str, Any]:
-    data: Dict[str, Any] = {}
-    if not raw_text:
+def extract_invoice_fields_from_text(raw_text: str, clave_acceso: Optional[str], type: str) -> Dict[str, Any]:
+
+    #factura 
+    if type == "factura":
+          
+        data: Dict[str, Any] = {}
+        if not raw_text:
+            if clave_acceso:
+                data["claveAcceso"] = clave_acceso
+            data["detalles"] = []
+            return data
+
+        text = strip_accents(raw_text)
+
+        # RUC
+        m = re.search(r"\bRUC[:\s]*([0-9]{13})\b", text, re.I) or re.search(r"\b([0-9]{13})\b", text)
+        if m:
+            data["ruc"] = m.group(1)
+
+        # Fecha
+        m = re.search(r"fecha\s*(?:de\s*)?emision[:\s]*([0-3]?\d[/-][01]?\d[/-]\d{2,4})", text, re.I) or \
+            re.search(r"\b([0-3]?\d[/-][01]?\d[/-]\d{2,4})\b", text)
+        if m:
+            f = m.group(1).replace("-", "/")
+            parts = f.split("/")
+            if len(parts[2]) == 2:
+                parts[2] = "20" + parts[2]
+            data["fechaEmision"] = "/".join(parts)
+
+        
+            print(f"DEBUG: Fecha emision: {data['fechaEmision']}")
+
+        # EXTRACCIÓN ROBUSTA DE VALORES FINANCIEROS
+        
+        # Total a pagar - múltiples patrones
+        total_patterns = [
+            r"total\s*a\s*pagar[:\s]*\$?\s*([0-9]+[\.,][0-9]{2})",
+            r"valor\s*total[:\s]*\$?\s*([0-9]+[\.,][0-9]{2})",
+            r"importe\s*total[:\s]*\$?\s*([0-9]+[\.,][0-9]{2})",
+            r"gran\s*total[:\s]*\$?\s*([0-9]+[\.,][0-9]{2})",
+            r"\bTOTAL\b[^0-9]{0,15}\$?\s*([0-9]+[\.,][0-9]{2})",
+            r"total.*?([0-9]+[\.,][0-9]{2})",  # Contexto flexible
+        ]
+        
+        for pattern in total_patterns:
+            m = re.search(pattern, text, re.I)
+            if m:
+                val = _to_float(m.group(1))
+                if 0.1 <= val <= 15000.0:  # Rango realista
+                    data["importeTotal"] = val
+                    break
+        
+        # Subtotal sin impuestos - múltiples patrones
+        subtotal_patterns = [
+            r"subtotal\s*(?:sin\s*)?(?:impuestos?)?[:\s]*\$?\s*([0-9]+[\.,][0-9]{2})",
+            r"subtotal\s*(?:15%|0%)?[:\s]*\$?\s*([0-9]+[\.,][0-9]{2})",
+            r"base\s*imponible[:\s]*\$?\s*([0-9]+[\.,][0-9]{2})",
+            r"sin\s*impuestos[:\s]*\$?\s*([0-9]+[\.,][0-9]{2})",
+            r"subtotal.*?([0-9]+[\.,][0-9]{2})",  # Contexto flexible
+        ]
+        
+        for pattern in subtotal_patterns:
+            m = re.search(pattern, text, re.I)
+            if m:
+                val = _to_float(m.group(1))
+                if 0.1 <= val <= 10000.0:  # Rango realista
+                    data["subtotal"] = val
+                    break
+        
+        # IVA - múltiples patrones
+        iva_patterns = [
+            r"iva\s*(?:15%?|12%?)?[:\s]*\$?\s*([0-9]+[\.,][0-9]{2})",
+            r"i\.?v\.?a\.?\s*(?:15%?)?[:\s]*\$?\s*([0-9]+[\.,][0-9]{2})",
+            r"impuesto\s*(?:valor\s*agregado)?[:\s]*\$?\s*([0-9]+[\.,][0-9]{2})",
+            r"15%[:\s]*\$?\s*([0-9]+[\.,][0-9]{2})",
+            r"12%[:\s]*\$?\s*([0-9]+[\.,][0-9]{2})",
+            r"iva.*?([0-9]+[\.,][0-9]{2})",  # Contexto flexible
+        ]
+        
+        for pattern in iva_patterns:
+            m = re.search(pattern, text, re.I)
+            if m:
+                val = _to_float(m.group(1))
+                if 0.0 <= val <= 5000.0:  # Rango realista
+                    data["iva"] = val
+                    break
+        
+        # Descuentos - múltiples patrones
+        descuento_patterns = [
+            r"descuento[:\s]*\$?\s*([0-9]+[\.,][0-9]{2})",
+            r"total\s*descuento[:\s]*\$?\s*([0-9]+[\.,][0-9]{2})",
+            r"rebaja[:\s]*\$?\s*([0-9]+[\.,][0-9]{2})",
+            r"descuento.*?([0-9]+[\.,][0-9]{2})",  # Contexto flexible
+        ]
+        
+        for pattern in descuento_patterns:
+            m = re.search(pattern, text, re.I)
+            if m:
+                val = _to_float(m.group(1))
+                if 0.0 <= val <= 1000.0:  # Rango realista
+                    data["descuento"] = val
+                    break
+
+        # Razón Social (heurística líneas cerca de RUC)
+        try:
+            lines = [l.strip() for l in text.splitlines() if l.strip()]
+            ruc_idx = next((i for i, l in enumerate(lines) if re.search(r"\bRUC\b", l, re.I)), None)
+            if ruc_idx and ruc_idx > 0:
+                block = " ".join(lines[max(0, ruc_idx - 3):ruc_idx])
+                block = re.sub(r"^(DIRECCION|SUCURSAL|MATRIZ).*$", "", block, flags=re.I)
+                data["razonSocial"] = " ".join(block.split())[:120]
+        except Exception:
+            pass
+
         if clave_acceso:
             data["claveAcceso"] = clave_acceso
-        data["detalles"] = []
+
+        # Ítems
+        data["detalles"] = extract_items_from_text(raw_text)
+
+        # Total calculado por ítems (si hay) - filtrar debug items
+        if data["detalles"]:
+            valid_items = [i for i in data["detalles"] if not i.get("DEBUG_INFO", False)]
+            if valid_items:
+                data["totalCalculadoPorItems"] = round(sum(_to_float(i["precioTotal"]) or 0.0 for i in valid_items), 2)
+
         return data
-
-    text = strip_accents(raw_text)
-
-    # RUC
-    m = re.search(r"\bRUC[:\s]*([0-9]{13})\b", text, re.I) or re.search(r"\b([0-9]{13})\b", text)
-    if m:
-        data["ruc"] = m.group(1)
-
-    # Fecha
-    m = re.search(r"fecha\s*(?:de\s*)?emision[:\s]*([0-3]?\d[/-][01]?\d[/-]\d{2,4})", text, re.I) or \
-        re.search(r"\b([0-3]?\d[/-][01]?\d[/-]\d{2,4})\b", text)
-    if m:
-        f = m.group(1).replace("-", "/")
-        parts = f.split("/")
-        if len(parts[2]) == 2:
-            parts[2] = "20" + parts[2]
-        data["fechaEmision"] = "/".join(parts)
-
-    # EXTRACCIÓN ROBUSTA DE VALORES FINANCIEROS
-    
-    # Total a pagar - múltiples patrones
-    total_patterns = [
-        r"total\s*a\s*pagar[:\s]*\$?\s*([0-9]+[\.,][0-9]{2})",
-        r"valor\s*total[:\s]*\$?\s*([0-9]+[\.,][0-9]{2})",
-        r"importe\s*total[:\s]*\$?\s*([0-9]+[\.,][0-9]{2})",
-        r"gran\s*total[:\s]*\$?\s*([0-9]+[\.,][0-9]{2})",
-        r"\bTOTAL\b[^0-9]{0,15}\$?\s*([0-9]+[\.,][0-9]{2})",
-        r"total.*?([0-9]+[\.,][0-9]{2})",  # Contexto flexible
-    ]
-    
-    for pattern in total_patterns:
-        m = re.search(pattern, text, re.I)
-        if m:
-            val = _to_float(m.group(1))
-            if 0.1 <= val <= 15000.0:  # Rango realista
-                data["importeTotal"] = val
-                break
-    
-    # Subtotal sin impuestos - múltiples patrones
-    subtotal_patterns = [
-        r"subtotal\s*(?:sin\s*)?(?:impuestos?)?[:\s]*\$?\s*([0-9]+[\.,][0-9]{2})",
-        r"subtotal\s*(?:15%|0%)?[:\s]*\$?\s*([0-9]+[\.,][0-9]{2})",
-        r"base\s*imponible[:\s]*\$?\s*([0-9]+[\.,][0-9]{2})",
-        r"sin\s*impuestos[:\s]*\$?\s*([0-9]+[\.,][0-9]{2})",
-        r"subtotal.*?([0-9]+[\.,][0-9]{2})",  # Contexto flexible
-    ]
-    
-    for pattern in subtotal_patterns:
-        m = re.search(pattern, text, re.I)
-        if m:
-            val = _to_float(m.group(1))
-            if 0.1 <= val <= 10000.0:  # Rango realista
-                data["subtotal"] = val
-                break
-    
-    # IVA - múltiples patrones
-    iva_patterns = [
-        r"iva\s*(?:15%?|12%?)?[:\s]*\$?\s*([0-9]+[\.,][0-9]{2})",
-        r"i\.?v\.?a\.?\s*(?:15%?)?[:\s]*\$?\s*([0-9]+[\.,][0-9]{2})",
-        r"impuesto\s*(?:valor\s*agregado)?[:\s]*\$?\s*([0-9]+[\.,][0-9]{2})",
-        r"15%[:\s]*\$?\s*([0-9]+[\.,][0-9]{2})",
-        r"12%[:\s]*\$?\s*([0-9]+[\.,][0-9]{2})",
-        r"iva.*?([0-9]+[\.,][0-9]{2})",  # Contexto flexible
-    ]
-    
-    for pattern in iva_patterns:
-        m = re.search(pattern, text, re.I)
-        if m:
-            val = _to_float(m.group(1))
-            if 0.0 <= val <= 5000.0:  # Rango realista
-                data["iva"] = val
-                break
-    
-    # Descuentos - múltiples patrones
-    descuento_patterns = [
-        r"descuento[:\s]*\$?\s*([0-9]+[\.,][0-9]{2})",
-        r"total\s*descuento[:\s]*\$?\s*([0-9]+[\.,][0-9]{2})",
-        r"rebaja[:\s]*\$?\s*([0-9]+[\.,][0-9]{2})",
-        r"descuento.*?([0-9]+[\.,][0-9]{2})",  # Contexto flexible
-    ]
-    
-    for pattern in descuento_patterns:
-        m = re.search(pattern, text, re.I)
-        if m:
-            val = _to_float(m.group(1))
-            if 0.0 <= val <= 1000.0:  # Rango realista
-                data["descuento"] = val
-                break
-
-    # Razón Social (heurística líneas cerca de RUC)
-    try:
-        lines = [l.strip() for l in text.splitlines() if l.strip()]
-        ruc_idx = next((i for i, l in enumerate(lines) if re.search(r"\bRUC\b", l, re.I)), None)
-        if ruc_idx and ruc_idx > 0:
-            block = " ".join(lines[max(0, ruc_idx - 3):ruc_idx])
-            block = re.sub(r"^(DIRECCION|SUCURSAL|MATRIZ).*$", "", block, flags=re.I)
-            data["razonSocial"] = " ".join(block.split())[:120]
-    except Exception:
-        pass
-
-    if clave_acceso:
-        data["claveAcceso"] = clave_acceso
-
-    # Ítems
-    data["detalles"] = extract_items_from_text(raw_text)
-
-    # Total calculado por ítems (si hay) - filtrar debug items
-    if data["detalles"]:
-        valid_items = [i for i in data["detalles"] if not i.get("DEBUG_INFO", False)]
-        if valid_items:
-            data["totalCalculadoPorItems"] = round(sum(_to_float(i["precioTotal"]) or 0.0 for i in valid_items), 2)
-
-    return data
