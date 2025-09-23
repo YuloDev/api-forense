@@ -1,5 +1,5 @@
-# La configuración de Tesseract se maneja globalmente
-import pytesseract
+# Usar configuración global de Tesseract
+import configurar_tesseract_global
 
 from app import app
 import uvicorn

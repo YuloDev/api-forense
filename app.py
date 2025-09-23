@@ -1,6 +1,5 @@
-# La configuración de Tesseract se maneja globalmente
-# Importar pytesseract sin configurar para evitar conflictos
-import pytesseract
+# Usar configuración global de Tesseract
+import configurar_tesseract_global
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware

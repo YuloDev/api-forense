@@ -22,6 +22,8 @@ from PIL import Image, ImageChops, ImageEnhance
 import cv2
 from skimage.metrics import structural_similarity as ssim
 from .type_conversion import ensure_python_bool, ensure_python_float, safe_serialize_dict
+# Usar configuración global de Tesseract
+import configurar_tesseract_global
 import pytesseract
 from pytesseract import Output
 

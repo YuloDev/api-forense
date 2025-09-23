@@ -35,12 +35,11 @@ try:
 except Exception:
     cv2 = None
 
+# Usar configuración global de Tesseract
+import configurar_tesseract_global
+
 try:
     import pytesseract
-    # La configuración de Tesseract se maneja globalmente
-    # Verificar si ya está configurado, si no, configurarlo
-    if not hasattr(pytesseract.pytesseract, 'tesseract_cmd') or not pytesseract.pytesseract.tesseract_cmd:
-        pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 except Exception:
     pytesseract = None
 
