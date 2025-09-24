@@ -1,0 +1,6 @@
+{
+  "ultimo_id": 0,
+  "prefijo": "CLM",
+  "formato": "CLM-{secuencial:06d}",
+  "ejemplo": "CLM-000001"
+}
