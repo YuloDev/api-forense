@@ -3,7 +3,7 @@ version: '3.8'
 services:
   api-forense:
     build:
-      context: .
+      context: ./build
       dockerfile: Dockerfile
     container_name: api-forense-container
     ports:
