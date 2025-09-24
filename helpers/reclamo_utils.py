@@ -17,7 +17,7 @@ def obtener_siguiente_id(ultimo_id: str = None) -> str:
     try:
         # Si se proporciona un último ID, extraer el número
         if ultimo_id:
-            # Extraer número del ID (ej: "CLM-000-001" -> 1)
+            # Extraer número del ID (ej: "CLM-000001" -> 1)
             import re
             match = re.search(r'(\d+)$', ultimo_id)
             if match:
@@ -42,8 +42,8 @@ def obtener_siguiente_id(ultimo_id: str = None) -> str:
         else:
             config = {
                 "prefijo": "CLM",
-                "formato": "CLM-{secuencial:000-000}",
-                "ejemplo": "CLM-000-001"
+                "formato": "CLM-{secuencial:06d}",
+                "ejemplo": "CLM-000001"
             }
         
         formato = config.get("formato", "CLM-{secuencial:06d}")
@@ -79,12 +79,12 @@ def generar_id_reclamo() -> str:
         else:
             config = {
                 "prefijo": "CLM",
-                "formato": "CLM-{secuencial:000-000}",
-                "ejemplo": "CLM-000-001"
+                "formato": "CLM-{secuencial:06d}",
+                "ejemplo": "CLM-000001"
             }
         
         # Generar ID con formato
-        formato = config.get("formato", "CLM-{secuencial:000-000}")
+        formato = config.get("formato", "CLM-{secuencial:06d}")
         id_reclamo = formato.format(secuencial=siguiente_id)
         
         # Actualizar último ID
