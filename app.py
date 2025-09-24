@@ -4,7 +4,7 @@ import configurar_tesseract_global
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
-from routes import health, validar, validar_documento, config, risk_levels, alineacion, reclamos, validacion_firma_universal, validar_imagen, validar_factura, validar_factura_nuevo, analisis_forense_imagen
+from routes import health, validar, validar_documento, config, risk_levels, alineacion, reclamos, validacion_firma_universal, validar_imagen, validar_factura, validar_factura_nuevo, analisis_forense_imagen, ocr
  
 app = FastAPI(
     title="Validador SRI + OCR + Comparación productos + Riesgo",
@@ -52,5 +52,6 @@ app.include_router(validar_imagen.router)
 app.include_router(validar_factura.router)
 app.include_router(validar_factura_nuevo.router)
 app.include_router(analisis_forense_imagen.router)
+app.include_router(ocr.router)
  
  

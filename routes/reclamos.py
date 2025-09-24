@@ -9,7 +9,7 @@ from typing import Dict, List, Optional, Any
 import json
 import os
 from datetime import datetime, date
-from generar_id_reclamo import generar_id_reclamo, obtener_siguiente_id
+from helpers.reclamo_utils import generar_id_reclamo, obtener_siguiente_id
 
 router = APIRouter()
 
@@ -59,8 +59,8 @@ def cargar_reclamos() -> Dict[str, Any]:
                 "estados_disponibles": ["En Revisión", "Aprobado", "Rechazado"],
                 "configuracion_id": {
                     "prefijo": "CLM",
-                    "formato": "CLM-{secuencial:000-000}",
-                    "ejemplo": "CLM-000-001"
+                    "formato": "CLM-{secuencial:06d}",
+                    "ejemplo": "CLM-000001"
                 }
             }
         }
@@ -69,7 +69,21 @@ def cargar_reclamos() -> Dict[str, Any]:
     
     try:
         with open(RECLAMOS_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
+            
+            # Asegurar que existe la estructura metadatos
+            if "metadatos" not in data:
+                data["metadatos"] = {
+                    "total_reclamos": len(data.get("reclamos", [])),
+                    "estados_disponibles": ["En Revisión", "Aprobado", "Rechazado"],
+                    "configuracion_id": {
+                        "prefijo": "CLM",
+                        "formato": "CLM-{secuencial:06d}",
+                        "ejemplo": "CLM-000001"
+                    }
+                }
+            
+            return data
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al cargar reclamos: {str(e)}")
 

@@ -79,6 +79,35 @@
         "ver": true,
         "subir": true
       }
+    },
+    {
+      "id_reclamo": "CLM-000006",
+      "fecha_envio": "24/09/2025",
+      "proveedor": {
+        "nombre": "Edison Javier",
+        "tipo_servicio": "Sesiones de Rehabilitación"
+      },
+      "estado": "En Revisión",
+      "monto_solicitado": 10.0,
+      "monto_aprobado": null,
+      "moneda": "$",
+      "acciones": {
+        "ver": true,
+        "subir": true
+      }
     }
-  ]
+  ],
+  "metadatos": {
+    "total_reclamos": 6,
+    "estados_disponibles": [
+      "En Revisión",
+      "Aprobado",
+      "Rechazado"
+    ],
+    "configuracion_id": {
+      "prefijo": "CLM",
+      "formato": "CLM-{secuencial:06d}",
+      "ejemplo": "CLM-000001"
+    }
+  }
 }
