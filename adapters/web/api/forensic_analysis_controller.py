@@ -24,6 +24,14 @@ from application.use_cases.ForensicAnalysisUseCases.check_compresion_estandar.an
 from adapters.persistence.repository.ForensicAnalysisRepository.check_compresion_estandar.compresion_estandar_service_impl import CompresionEstandarServiceAdapter
 from application.use_cases.ForensicAnalysisUseCases.check_alineacion_texto.analyze_alineacion_texto_use_case import AnalyzeAlineacionTextoUseCase
 from adapters.persistence.repository.ForensicAnalysisRepository.check_alineacion_texto.alineacion_texto_service_impl import AlineacionTextoServiceAdapter
+from application.use_cases.ForensicAnalysisUseCases.check_javascript_embebido.analyze_javascript_embebido_use_case import AnalyzeJavascriptEmbebidoUseCase
+from adapters.persistence.repository.ForensicAnalysisRepository.check_javascript_embebido.javascript_embebido_service_impl import JavascriptEmbebidoServiceAdapter
+from application.use_cases.ForensicAnalysisUseCases.check_actualizaciones_incrementales.analyze_actualizaciones_incrementales_use_case import AnalyzeActualizacionesIncrementalesUseCase
+from adapters.persistence.repository.ForensicAnalysisRepository.check_actualizaciones_incrementales.actualizaciones_incrementales_service_impl import ActualizacionesIncrementalesServiceAdapter
+from application.use_cases.ForensicAnalysisUseCases.check_cifrado_permisos_extra.analyze_cifrado_permisos_extra_use_case import AnalyzeCifradoPermisosExtraUseCase
+from adapters.persistence.repository.ForensicAnalysisRepository.check_cifrado_permisos_extra.cifrado_permisos_extra_service_impl import CifradoPermisosExtraServiceAdapter
+from application.use_cases.ForensicAnalysisUseCases.check_extraccion_texto_ocr.analyze_extraccion_texto_ocr_use_case import AnalyzeExtraccionTextoOcrUseCase
+from adapters.persistence.repository.ForensicAnalysisRepository.check_extraccion_texto_ocr.extraccion_texto_ocr_service_impl import ExtraccionTextoOcrServiceAdapter
 
 # Modelos de request
 class ForensicPDFRequest(BaseModel):
@@ -71,6 +79,15 @@ async def analyze_pdf_forensic(request: ForensicPDFRequest) -> JSONResponse:
         alineacion_texto_service = AlineacionTextoServiceAdapter()
         alineacion_texto_use_case = AnalyzeAlineacionTextoUseCase(alineacion_texto_service)
         
+        javascript_embebido_service = JavascriptEmbebidoServiceAdapter()
+        javascript_embebido_use_case = AnalyzeJavascriptEmbebidoUseCase(javascript_embebido_service)
+        
+        actualizaciones_incrementales_service = ActualizacionesIncrementalesServiceAdapter()
+        actualizaciones_incrementales_use_case = AnalyzeActualizacionesIncrementalesUseCase(actualizaciones_incrementales_service)
+        
+        cifrado_permisos_extra_service = CifradoPermisosExtraServiceAdapter()
+        cifrado_permisos_extra_use_case = AnalyzeCifradoPermisosExtraUseCase(cifrado_permisos_extra_service)
+        
         # Ejecutar análisis de capas múltiples
         capas_result = capas_multiples_use_case.execute(pdf_bytes)
         
@@ -85,6 +102,15 @@ async def analyze_pdf_forensic(request: ForensicPDFRequest) -> JSONResponse:
         
         # Ejecutar análisis de compresión estándar
         compresion_estandar_result = compresion_estandar_use_case.execute_pdf(pdf_bytes)
+        
+        # Ejecutar análisis de JavaScript embebido
+        javascript_embebido_result = javascript_embebido_use_case.execute_pdf(pdf_bytes)
+        
+        # Ejecutar análisis de actualizaciones incrementales
+        actualizaciones_incrementales_result = actualizaciones_incrementales_use_case.execute_pdf(pdf_bytes)
+        
+        # Ejecutar análisis de cifrado y permisos especiales
+        cifrado_permisos_extra_result = cifrado_permisos_extra_use_case.execute_pdf(pdf_bytes)
         
         # Ejecutar análisis de consistencia de fuentes (si hay resultado OCR)
         font_consistency_result = None
@@ -105,7 +131,7 @@ async def analyze_pdf_forensic(request: ForensicPDFRequest) -> JSONResponse:
         
         # Generar resumen general
         resumen_general = _generate_general_summary(
-            capas_result, fecha_result, adicionales, font_consistency_result, alineacion_texto_result
+            capas_result, fecha_result, adicionales, font_consistency_result, alineacion_texto_result, javascript_embebido_result, actualizaciones_incrementales_result, cifrado_permisos_extra_result
         )
         
         result = {
@@ -167,6 +193,18 @@ async def analyze_image_forensic(request: ForensicImageRequest) -> JSONResponse:
         alineacion_texto_service = AlineacionTextoServiceAdapter()
         alineacion_texto_use_case = AnalyzeAlineacionTextoUseCase(alineacion_texto_service)
         
+        javascript_embebido_service = JavascriptEmbebidoServiceAdapter()
+        javascript_embebido_use_case = AnalyzeJavascriptEmbebidoUseCase(javascript_embebido_service)
+        
+        actualizaciones_incrementales_service = ActualizacionesIncrementalesServiceAdapter()
+        actualizaciones_incrementales_use_case = AnalyzeActualizacionesIncrementalesUseCase(actualizaciones_incrementales_service)
+        
+        cifrado_permisos_extra_service = CifradoPermisosExtraServiceAdapter()
+        cifrado_permisos_extra_use_case = AnalyzeCifradoPermisosExtraUseCase(cifrado_permisos_extra_service)
+        
+        extraccion_texto_ocr_service = ExtraccionTextoOcrServiceAdapter()
+        extraccion_texto_ocr_use_case = AnalyzeExtraccionTextoOcrUseCase(extraccion_texto_ocr_service)
+        
         # Ejecutar análisis de fechas
         fecha_result = fecha_use_case.execute_image(image_bytes)
         
@@ -178,6 +216,18 @@ async def analyze_image_forensic(request: ForensicImageRequest) -> JSONResponse:
         
         # Ejecutar análisis de compresión estándar
         compresion_estandar_result = compresion_estandar_use_case.execute_image(image_bytes)
+        
+        # Ejecutar análisis de JavaScript embebido
+        javascript_embebido_result = javascript_embebido_use_case.execute_image(image_bytes)
+        
+        # Ejecutar análisis de actualizaciones incrementales
+        actualizaciones_incrementales_result = actualizaciones_incrementales_use_case.execute_image(image_bytes)
+        
+        # Ejecutar análisis de cifrado y permisos especiales
+        cifrado_permisos_extra_result = cifrado_permisos_extra_use_case.execute_image(image_bytes)
+        
+        # Ejecutar análisis de extracción de texto OCR (solo para imágenes)
+        extraccion_texto_ocr_result = extraccion_texto_ocr_use_case.execute_image(image_bytes)
         
         # Ejecutar análisis de consistencia de fuentes (si hay resultado OCR)
         font_consistency_result = None
@@ -198,7 +248,7 @@ async def analyze_image_forensic(request: ForensicImageRequest) -> JSONResponse:
         
         # Generar resumen general
         resumen_general = _generate_general_summary(
-            None, fecha_result, adicionales, font_consistency_result, alineacion_texto_result
+            None, fecha_result, adicionales, font_consistency_result, alineacion_texto_result, javascript_embebido_result, actualizaciones_incrementales_result, cifrado_permisos_extra_result, extraccion_texto_ocr_result
         )
         
         result = {
@@ -231,7 +281,9 @@ async def analyze_image_forensic(request: ForensicImageRequest) -> JSONResponse:
 
 def _generate_general_summary(capas_result: Dict = None, fecha_result: Dict = None, 
                             adicionales: List[Dict] = None, font_consistency_result: Dict = None, 
-                            alineacion_texto_result: Dict = None) -> List[str]:
+                            alineacion_texto_result: Dict = None, javascript_embebido_result: Dict = None, 
+                            actualizaciones_incrementales_result: Dict = None, cifrado_permisos_extra_result: Dict = None, 
+                            extraccion_texto_ocr_result: Dict = None) -> List[str]:
     """Genera un resumen general basado en todos los análisis realizados"""
     summary = []
     
@@ -277,6 +329,38 @@ def _generate_general_summary(capas_result: Dict = None, fecha_result: Dict = No
         else:
             summary.append("Análisis de alineación de texto: Alineación correcta")
     
+    # Resumen de JavaScript embebido (si está disponible)
+    if javascript_embebido_result:
+        js_penalty = javascript_embebido_result.get("penalizacion", 0)
+        if js_penalty > 0:
+            summary.append(f"Análisis de JavaScript embebido: {js_penalty} puntos de penalización")
+        else:
+            summary.append("Análisis de JavaScript embebido: Sin JavaScript detectado")
+    
+    # Resumen de actualizaciones incrementales (si está disponible)
+    if actualizaciones_incrementales_result:
+        updates_penalty = actualizaciones_incrementales_result.get("penalizacion", 0)
+        if updates_penalty > 0:
+            summary.append(f"Análisis de actualizaciones incrementales: {updates_penalty} puntos de penalización")
+        else:
+            summary.append("Análisis de actualizaciones incrementales: Sin actualizaciones detectadas")
+    
+    # Resumen de cifrado y permisos especiales (si está disponible)
+    if cifrado_permisos_extra_result:
+        crypto_penalty = cifrado_permisos_extra_result.get("penalizacion", 0)
+        if crypto_penalty > 0:
+            summary.append(f"Análisis de cifrado y permisos especiales: {crypto_penalty} puntos de penalización")
+        else:
+            summary.append("Análisis de cifrado y permisos especiales: Sin restricciones detectadas")
+    
+    # Resumen de extracción de texto OCR (solo para imágenes)
+    if extraccion_texto_ocr_result:
+        ocr_penalty = extraccion_texto_ocr_result.get("penalizacion", 0)
+        if ocr_penalty > 0:
+            summary.append(f"Análisis de extracción de texto OCR: {ocr_penalty} puntos de penalización")
+        else:
+            summary.append("Análisis de extracción de texto OCR: Texto extraído correctamente")
+    
     # Resumen general de riesgo
     total_penalty = 0
     if capas_result:
@@ -288,6 +372,14 @@ def _generate_general_summary(capas_result: Dict = None, fecha_result: Dict = No
             total_penalty += check.get("penalizacion", 0)
     if alineacion_texto_result:
         total_penalty += alineacion_texto_result.get("penalizacion", 0)
+    if javascript_embebido_result:
+        total_penalty += javascript_embebido_result.get("penalizacion", 0)
+    if actualizaciones_incrementales_result:
+        total_penalty += actualizaciones_incrementales_result.get("penalizacion", 0)
+    if cifrado_permisos_extra_result:
+        total_penalty += cifrado_permisos_extra_result.get("penalizacion", 0)
+    if extraccion_texto_ocr_result:
+        total_penalty += extraccion_texto_ocr_result.get("penalizacion", 0)
     
     if total_penalty == 0:
         summary.append("RESUMEN: Documento sin indicadores de manipulación detectados")
