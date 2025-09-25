@@ -14,11 +14,6 @@
     "descripcion": "Uso de software conocido y confiable para crear el PDF",
     "explicacion": "Documentos creados con software desconocido o poco común pueden ser sospechosos."
   },
-  "num_paginas": {
-    "valor": 10,
-    "descripcion": "Número de páginas esperado para el tipo de documento",
-    "explicacion": "Facturas típicamente tienen una página. Múltiples páginas pueden indicar manipulación o complejidad inusual."
-  },
   "capas_multiples": {
     "valor": 10,
     "descripcion": "Presencia de capas múltiples (OCG) en el PDF",
@@ -89,21 +84,7 @@
     "descripcion": "Extracción de texto mediante OCR (Reconocimiento Óptico de Caracteres)",
     "explicacion": "La incapacidad de extraer texto legible de una imagen puede indicar manipulación, baja calidad o formato no estándar."
   },
-  "campos_criticos_factura": {
-    "valor": 40,
-    "descripcion": "Presencia de campos críticos de factura (RUC, Razón Social, Fecha, Total)",
-    "explicacion": "La ausencia de campos esenciales de facturación puede indicar que la imagen no es una factura legítima o que ha sido manipulada."
-  },
-  "clave_acceso_sri": {
-    "valor": 20,
-    "descripcion": "Presencia de clave de acceso SRI válida",
-    "explicacion": "Sin clave de acceso SRI no se puede validar la autenticidad del documento contra registros oficiales."
-  },
-  "doble_compresion_detectada": {
-    "valor": 15,
-    "descripcion": "Detección de doble compresión en imagen JPEG",
-    "explicacion": "La compresión múltiple puede indicar que la imagen fue editada y re-guardada, sugiriendo manipulación."
-  },
+
   "inconsistencias_ruido_bordes": {
     "valor": 18,
     "descripcion": "Inconsistencias en patrones de ruido y bordes",
@@ -113,16 +94,6 @@
     "valor": 12,
     "descripcion": "Análisis ELA (Error Level Analysis) sospechoso",
     "explicacion": "El ELA detecta áreas de la imagen que han sido editadas o re-comprimidas, indicando posible manipulación."
-  },
-  "analisis_phash_sospechoso": {
-    "valor": 10,
-    "descripcion": "Análisis de hash perceptual (pHash) sospechoso",
-    "explicacion": "Diferencias significativas en hash perceptual por bloques pueden indicar edición local o pegado de elementos."
-  },
-  "analisis_ssim_sospechoso": {
-    "valor": 8,
-    "descripcion": "Análisis SSIM (Structural Similarity Index) regional sospechoso",
-    "explicacion": "Baja similitud estructural entre regiones puede indicar áreas editadas o elementos pegados."
   },
   "metadatos_sospechosos": {
     "valor": 5,
@@ -143,30 +114,5 @@
     "valor": 15,
     "descripcion": "Evidencias forenses generales de manipulación",
     "explicacion": "Indicadores técnicos que sugieren que la imagen ha sido modificada o manipulada digitalmente."
-  },
-  "inconsistencia_financiera_items_subtotal": {
-    "valor": 25,
-    "descripcion": "Inconsistencia entre suma de ítems y subtotal sin impuestos",
-    "explicacion": "La suma de los ítems individuales debe coincidir con el subtotal sin impuestos. Una diferencia indica posible manipulación de totales."
-  },
-  "inconsistencia_financiera_total_recompuesto": {
-    "valor": 30,
-    "descripcion": "Inconsistencia entre total recompuesto y total declarado",
-    "explicacion": "El total calculado (subtotal + impuestos - descuentos) debe coincidir con el total declarado. Una diferencia indica manipulación financiera."
-  },
-  "categoria_primaria_max": {
-    "valor": 5,
-    "descripcion": "Penalización máxima para categoría Primaria",
-    "explicacion": "Límite superior de puntos de penalización para elementos de alta prioridad en el análisis forense."
-  },
-  "categoria_secundaria_max": {
-    "valor": 5,
-    "descripcion": "Penalización máxima para categoría Secundaria",
-    "explicacion": "Límite superior de puntos de penalización para elementos de prioridad media en el análisis forense."
-  },
-  "categoria_adicional_max": {
-    "valor": 5,
-    "descripcion": "Penalización máxima para categoría Adicional",
-    "explicacion": "Límite superior de puntos de penalización para elementos de prioridad baja en el análisis forense."
   }
 }

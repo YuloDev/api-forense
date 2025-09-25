@@ -117,21 +117,6 @@ else:
             "descripcion": "Extracción de texto mediante OCR (Reconocimiento Óptico de Caracteres)",
             "explicacion": "La incapacidad de extraer texto legible de una imagen puede indicar manipulación, baja calidad o formato no estándar."
         },
-        "campos_criticos_factura": {
-            "valor": 40,
-            "descripcion": "Presencia de campos críticos de factura (RUC, Razón Social, Fecha, Total)",
-            "explicacion": "La ausencia de campos esenciales de facturación puede indicar que la imagen no es una factura legítima o que ha sido manipulada."
-        },
-        "clave_acceso_sri": {
-            "valor": 20,
-            "descripcion": "Presencia de clave de acceso SRI válida",
-            "explicacion": "Sin clave de acceso SRI no se puede validar la autenticidad del documento contra registros oficiales."
-        },
-        "doble_compresion_detectada": {
-            "valor": 15,
-            "descripcion": "Detección de doble compresión en imagen JPEG",
-            "explicacion": "La compresión múltiple puede indicar que la imagen fue editada y re-guardada, sugiriendo manipulación."
-        },
         "inconsistencias_ruido_bordes": {
             "valor": 18,
             "descripcion": "Inconsistencias en patrones de ruido y bordes",
@@ -141,16 +126,6 @@ else:
             "valor": 12,
             "descripcion": "Análisis ELA (Error Level Analysis) sospechoso",
             "explicacion": "El ELA detecta áreas de la imagen que han sido editadas o re-comprimidas, indicando posible manipulación."
-        },
-        "analisis_phash_sospechoso": {
-            "valor": 10,
-            "descripcion": "Análisis de hash perceptual (pHash) sospechoso",
-            "explicacion": "Diferencias significativas en hash perceptual por bloques pueden indicar edición local o pegado de elementos."
-        },
-        "analisis_ssim_sospechoso": {
-            "valor": 8,
-            "descripcion": "Análisis SSIM (Structural Similarity Index) regional sospechoso",
-            "explicacion": "Baja similitud estructural entre regiones puede indicar áreas editadas o elementos pegados."
         },
         "metadatos_sospechosos": {
             "valor": 5,
@@ -166,11 +141,6 @@ else:
             "valor": 20,
             "descripcion": "Presencia de capas ocultas en formatos que las soportan",
             "explicacion": "Capas ocultas pueden contener información no visible que modifica el contenido aparente del documento."
-        },
-        "evidencias_forenses": {
-            "valor": 15,
-            "descripcion": "Evidencias forenses generales de manipulación",
-            "explicacion": "Indicadores técnicos que sugieren que la imagen ha sido modificada o manipulada digitalmente."
         }
     }
     
