@@ -1,8 +1,15 @@
+import os
+
 # Config layer - Configuración y DI
 
 # Configuración de la aplicación
 MAX_PDF_BYTES = 10 * 1024 * 1024  # 10MB
 SRI_TIMEOUT = 30  # 30 segundos
+
+# AWS Configuration
+AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY") 
+AWS_DEFAULT_REGION = os.getenv("AWS_DEFAULT_REGION", "us-east-1")
 
 # Configuración de comparación de productos
 PRICE_EPS = 0.01  # Épsilon para comparación de precios
