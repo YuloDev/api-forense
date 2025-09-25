@@ -32,6 +32,16 @@ from application.use_cases.ForensicAnalysisUseCases.check_cifrado_permisos_extra
 from adapters.persistence.repository.ForensicAnalysisRepository.check_cifrado_permisos_extra.cifrado_permisos_extra_service_impl import CifradoPermisosExtraServiceAdapter
 from application.use_cases.ForensicAnalysisUseCases.check_extraccion_texto_ocr.analyze_extraccion_texto_ocr_use_case import AnalyzeExtraccionTextoOcrUseCase
 from adapters.persistence.repository.ForensicAnalysisRepository.check_extraccion_texto_ocr.extraccion_texto_ocr_service_impl import ExtraccionTextoOcrServiceAdapter
+from application.use_cases.ForensicAnalysisUseCases.check_inconsistencias_ruido_bordes.analyze_inconsistencias_ruido_bordes_use_case import AnalyzeInconsistenciasRuidoBordesUseCase
+from adapters.persistence.repository.ForensicAnalysisRepository.check_inconsistencias_ruido_bordes.inconsistencias_ruido_bordes_service_impl import InconsistenciasRuidoBordesServiceAdapter
+from application.use_cases.ForensicAnalysisUseCases.check_analisis_ela_sospechoso.analyze_analisis_ela_sospechoso_use_case import AnalyzeAnalisisElaSospechosoUseCase
+from adapters.persistence.repository.ForensicAnalysisRepository.check_analisis_ela_sospechoso.analisis_ela_sospechoso_service_impl import AnalisisElaSospechosoServiceAdapter
+from application.use_cases.ForensicAnalysisUseCases.check_texto_superpuesto.analyze_texto_superpuesto_use_case import AnalyzeTextoSuperpuestoUseCase
+from adapters.persistence.repository.ForensicAnalysisRepository.check_texto_superpuesto.texto_superpuesto_service_impl import TextoSuperpuestoServiceAdapter
+from application.use_cases.ForensicAnalysisUseCases.check_capas_ocultas.analyze_capas_ocultas_use_case import AnalyzeCapasOcultasUseCase
+from adapters.persistence.repository.ForensicAnalysisRepository.check_capas_ocultas.capas_ocultas_service_impl import CapasOcultasServiceAdapter
+from application.use_cases.ForensicAnalysisUseCases.check_evidencias_forenses.analyze_evidencias_forenses_use_case import AnalyzeEvidenciasForensesUseCase
+from adapters.persistence.repository.ForensicAnalysisRepository.check_evidencias_forenses.evidencias_forenses_service_impl import EvidenciasForensesServiceAdapter
 
 # Modelos de request
 class ForensicPDFRequest(BaseModel):
@@ -205,6 +215,21 @@ async def analyze_image_forensic(request: ForensicImageRequest) -> JSONResponse:
         extraccion_texto_ocr_service = ExtraccionTextoOcrServiceAdapter()
         extraccion_texto_ocr_use_case = AnalyzeExtraccionTextoOcrUseCase(extraccion_texto_ocr_service)
         
+        inconsistencias_ruido_bordes_service = InconsistenciasRuidoBordesServiceAdapter()
+        inconsistencias_ruido_bordes_use_case = AnalyzeInconsistenciasRuidoBordesUseCase(inconsistencias_ruido_bordes_service)
+        
+        analisis_ela_sospechoso_service = AnalisisElaSospechosoServiceAdapter()
+        analisis_ela_sospechoso_use_case = AnalyzeAnalisisElaSospechosoUseCase(analisis_ela_sospechoso_service)
+        
+        texto_superpuesto_service = TextoSuperpuestoServiceAdapter()
+        texto_superpuesto_use_case = AnalyzeTextoSuperpuestoUseCase(texto_superpuesto_service)
+        
+        capas_ocultas_service = CapasOcultasServiceAdapter()
+        capas_ocultas_use_case = AnalyzeCapasOcultasUseCase(capas_ocultas_service)
+        
+        evidencias_forenses_service = EvidenciasForensesServiceAdapter()
+        evidencias_forenses_use_case = AnalyzeEvidenciasForensesUseCase(evidencias_forenses_service)
+        
         # Ejecutar análisis de fechas
         fecha_result = fecha_use_case.execute_image(image_bytes)
         
@@ -229,6 +254,21 @@ async def analyze_image_forensic(request: ForensicImageRequest) -> JSONResponse:
         # Ejecutar análisis de extracción de texto OCR (solo para imágenes)
         extraccion_texto_ocr_result = extraccion_texto_ocr_use_case.execute_image(image_bytes)
         
+        # Ejecutar análisis de inconsistencias en ruido y bordes (solo para imágenes)
+        inconsistencias_ruido_bordes_result = inconsistencias_ruido_bordes_use_case.execute_image(image_bytes)
+        
+        # Ejecutar análisis de ELA sospechoso (solo para imágenes)
+        analisis_ela_sospechoso_result = analisis_ela_sospechoso_use_case.execute_image(image_bytes)
+        
+        # Ejecutar análisis de texto superpuesto (solo para imágenes)
+        texto_superpuesto_result = texto_superpuesto_use_case.execute_image(image_bytes, request.ocr_result)
+        
+        # Ejecutar análisis de capas ocultas (solo para imágenes)
+        capas_ocultas_result = capas_ocultas_use_case.execute_image(image_bytes)
+        
+        # Ejecutar análisis de evidencias forenses (solo para imágenes)
+        evidencias_forenses_result = evidencias_forenses_use_case.execute_image(image_bytes)
+        
         # Ejecutar análisis de consistencia de fuentes (si hay resultado OCR)
         font_consistency_result = None
         if request.ocr_result:
@@ -248,7 +288,7 @@ async def analyze_image_forensic(request: ForensicImageRequest) -> JSONResponse:
         
         # Generar resumen general
         resumen_general = _generate_general_summary(
-            None, fecha_result, adicionales, font_consistency_result, alineacion_texto_result, javascript_embebido_result, actualizaciones_incrementales_result, cifrado_permisos_extra_result, extraccion_texto_ocr_result
+            None, fecha_result, adicionales, font_consistency_result, alineacion_texto_result, javascript_embebido_result, actualizaciones_incrementales_result, cifrado_permisos_extra_result, extraccion_texto_ocr_result, inconsistencias_ruido_bordes_result, analisis_ela_sospechoso_result, texto_superpuesto_result, capas_ocultas_result, evidencias_forenses_result
         )
         
         result = {
@@ -283,7 +323,9 @@ def _generate_general_summary(capas_result: Dict = None, fecha_result: Dict = No
                             adicionales: List[Dict] = None, font_consistency_result: Dict = None, 
                             alineacion_texto_result: Dict = None, javascript_embebido_result: Dict = None, 
                             actualizaciones_incrementales_result: Dict = None, cifrado_permisos_extra_result: Dict = None, 
-                            extraccion_texto_ocr_result: Dict = None) -> List[str]:
+                            extraccion_texto_ocr_result: Dict = None, inconsistencias_ruido_bordes_result: Dict = None, 
+                            analisis_ela_sospechoso_result: Dict = None, texto_superpuesto_result: Dict = None, 
+                            capas_ocultas_result: Dict = None, evidencias_forenses_result: Dict = None) -> List[str]:
     """Genera un resumen general basado en todos los análisis realizados"""
     summary = []
     
@@ -361,6 +403,46 @@ def _generate_general_summary(capas_result: Dict = None, fecha_result: Dict = No
         else:
             summary.append("Análisis de extracción de texto OCR: Texto extraído correctamente")
     
+    # Resumen de inconsistencias en ruido y bordes (solo para imágenes)
+    if inconsistencias_ruido_bordes_result:
+        noise_penalty = inconsistencias_ruido_bordes_result.get("penalizacion", 0)
+        if noise_penalty > 0:
+            summary.append(f"Análisis de inconsistencias en ruido y bordes: {noise_penalty} puntos de penalización")
+        else:
+            summary.append("Análisis de inconsistencias en ruido y bordes: Sin inconsistencias detectadas")
+    
+    # Resumen de análisis ELA sospechoso (solo para imágenes)
+    if analisis_ela_sospechoso_result:
+        ela_penalty = analisis_ela_sospechoso_result.get("penalizacion", 0)
+        if ela_penalty > 0:
+            summary.append(f"Análisis ELA sospechoso: {ela_penalty} puntos de penalización")
+        else:
+            summary.append("Análisis ELA sospechoso: Sin áreas sospechosas detectadas")
+    
+    # Resumen de detección de texto superpuesto (solo para imágenes)
+    if texto_superpuesto_result:
+        texto_penalty = texto_superpuesto_result.get("penalizacion", 0)
+        if texto_penalty > 0:
+            summary.append(f"Detección de texto superpuesto: {texto_penalty} puntos de penalización")
+        else:
+            summary.append("Detección de texto superpuesto: Sin texto superpuesto detectado")
+    
+    # Resumen de detección de capas ocultas (solo para imágenes)
+    if capas_ocultas_result:
+        capas_penalty = capas_ocultas_result.get("penalizacion", 0)
+        if capas_penalty > 0:
+            summary.append(f"Detección de capas ocultas: {capas_penalty} puntos de penalización")
+        else:
+            summary.append("Detección de capas ocultas: Sin capas ocultas detectadas")
+    
+    # Resumen de análisis de evidencias forenses (solo para imágenes)
+    if evidencias_forenses_result:
+        evidencias_penalty = evidencias_forenses_result.get("penalizacion", 0)
+        if evidencias_penalty > 0:
+            summary.append(f"Análisis de evidencias forenses: {evidencias_penalty} puntos de penalización")
+        else:
+            summary.append("Análisis de evidencias forenses: Sin evidencias forenses detectadas")
+    
     # Resumen general de riesgo
     total_penalty = 0
     if capas_result:
@@ -380,6 +462,16 @@ def _generate_general_summary(capas_result: Dict = None, fecha_result: Dict = No
         total_penalty += cifrado_permisos_extra_result.get("penalizacion", 0)
     if extraccion_texto_ocr_result:
         total_penalty += extraccion_texto_ocr_result.get("penalizacion", 0)
+    if inconsistencias_ruido_bordes_result:
+        total_penalty += inconsistencias_ruido_bordes_result.get("penalizacion", 0)
+    if analisis_ela_sospechoso_result:
+        total_penalty += analisis_ela_sospechoso_result.get("penalizacion", 0)
+    if texto_superpuesto_result:
+        total_penalty += texto_superpuesto_result.get("penalizacion", 0)
+    if capas_ocultas_result:
+        total_penalty += capas_ocultas_result.get("penalizacion", 0)
+    if evidencias_forenses_result:
+        total_penalty += evidencias_forenses_result.get("penalizacion", 0)
     
     if total_penalty == 0:
         summary.append("RESUMEN: Documento sin indicadores de manipulación detectados")

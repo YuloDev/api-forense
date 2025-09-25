@@ -8,6 +8,7 @@ import io
 import pikepdf
 from typing import Dict, Any
 from .image_renderer import render_png, diff_ratio
+from .stream_analyzer import get_page_streams, set_page_stream_prefix
 
 # Constantes para análisis por capas
 PIX_DIFF_THRESHOLD = 0.05  # 5% de píxeles distintos => consideramos que "cambió"

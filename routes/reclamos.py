@@ -9,7 +9,7 @@ from typing import Dict, List, Optional, Any
 import json
 import os
 from datetime import datetime, date
-from generar_id_reclamo import generar_id_reclamo, obtener_siguiente_id
+from helpers.reclamo_id_generator import generar_id_reclamo, obtener_siguiente_id
 
 router = APIRouter()
 

@@ -21,7 +21,7 @@ from config import (
     MATCH_THRESHOLD,
 )
 from utils import log_step, normalize_comprobante_xml, strip_accents, _to_float
-from pdf_extract import extract_clave_acceso_from_text, extract_invoice_fields_from_text
+from helpers.pdf_extract_functions import extract_clave_acceso_from_text, extract_invoice_fields_from_text
 from helpers.type_conversion import safe_serialize_dict
 from helpers.firma_digital import analizar_firmas_digitales_avanzado
 from helpers.validacion_firma_digital import detectar_firmas_pdf_simple

@@ -11,7 +11,7 @@ from pdfminer.high_level import extract_text
 
 from config import MAX_PDF_BYTES
 from utils import log_step
-from pdf_extract import extract_clave_acceso_from_text, extract_invoice_fields_from_text
+from helpers.pdf_extract_functions import extract_clave_acceso_from_text, extract_invoice_fields_from_text
 from helpers.type_conversion import safe_serialize_dict
 # OCR functionality básica restaurada
 def easyocr_text_from_pdf(pdf_bytes, lang=['es', 'en']):

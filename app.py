@@ -8,6 +8,11 @@ from routes import health, validar, validar_documento, config, risk_levels, alin
 from adapters.web.api.ocr_controller import router as ocr_router
 from adapters.web.api.forensic_ocr_controller import router as forensic_ocr_router
 from adapters.web.api.forensic_analysis_controller import router as forensic_analysis_router
+from adapters.web.api.aws_textract_controller import router as aws_textract_router
+from adapters.web.api.parse_pdf_controller import router as parse_pdf_router
+from adapters.web.api.risk_weights_controller import router as risk_weights_router
+from adapters.web.api.risk_levels_controller import router as risk_levels_router
+from adapters.web.api.reclamos_controller import router as reclamos_router
  
 app = FastAPI(
     title="Validador SRI + OCR + Comparación productos + Riesgo",
@@ -58,5 +63,10 @@ app.include_router(analisis_forense_imagen.router)
 app.include_router(ocr_router)
 app.include_router(forensic_ocr_router)
 app.include_router(forensic_analysis_router)
+app.include_router(aws_textract_router)
+app.include_router(parse_pdf_router)
+app.include_router(risk_weights_router)
+app.include_router(risk_levels_router)
+app.include_router(reclamos_router)
  
  
