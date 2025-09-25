@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional, Tuple
 
 # Usar configuración global de Tesseract
-import configurar_tesseract_global
+import config
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse

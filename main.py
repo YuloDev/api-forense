@@ -1,5 +1,5 @@
-# Usar configuración global de Tesseract
-import configurar_tesseract_global
+# Usar configuración global de Tesseract desde config
+import config
 
 from app import app
 import uvicorn

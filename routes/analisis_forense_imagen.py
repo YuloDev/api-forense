@@ -36,7 +36,7 @@ except Exception:
     cv2 = None
 
 # Usar configuración global de Tesseract
-import configurar_tesseract_global
+import config
 
 try:
     import pytesseract

@@ -15,7 +15,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 # Usar configuración global de Tesseract
-import configurar_tesseract_global
+import config
 
 # Agregar el directorio raíz al path para importar módulos
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
