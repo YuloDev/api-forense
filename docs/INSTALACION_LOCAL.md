@@ -60,6 +60,11 @@ EASYOCR_GPU=false
 EASYOCR_LANGS=es,en
 RENDER_DPI=250
 
+# Configuración AWS (requerido para /aws-textract-ocr)
+AWS_ACCESS_KEY_ID=AKIA1234567890EXAMPLE
+AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYzEXAMPLEKEY
+AWS_DEFAULT_REGION=us-east-1
+
 # Configuración de comparación
 CMP_QTY_EPS=0.001
 CMP_PRICE_EPS=0.01
@@ -71,6 +76,8 @@ TEXT_MIN_LEN_FOR_DOC=50
 MAX_DIAS_CREACION_EMISION_OK=30
 MAX_DIAS_MOD_VS_CREACION_OK=10
 ```
+
+**⚠️ Para usar AWS Textract**, debes configurar las credenciales. Ver guía completa: [AWS_SETUP.md](AWS_SETUP.md)
 
 ### 4. Levantar el Servidor
 ```bash

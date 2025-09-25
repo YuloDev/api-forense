@@ -10,6 +10,11 @@ RENDER_DPI = int(os.getenv("RENDER_DPI", "260"))
 EASYOCR_LANGS = os.getenv("EASYOCR_LANGS", "es,en").split(",")
 EASYOCR_GPU = os.getenv("EASYOCR_GPU", "false").lower() == "true"
 
+# AWS Configuration
+AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY") 
+AWS_DEFAULT_REGION = os.getenv("AWS_DEFAULT_REGION", "us-east-1")
+
 # Tolerancias comparación SRI vs PDF
 QTY_EPS = float(os.getenv("CMP_QTY_EPS", "0.001"))
 PRICE_EPS = float(os.getenv("CMP_PRICE_EPS", "0.01"))
