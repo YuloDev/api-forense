@@ -7,7 +7,7 @@ Analiza la alineación correcta de elementos de texto basado en resultados OCR.
 import math
 import statistics
 from typing import Dict, Any, List, Optional, Tuple
-from domain.entities.forensic_ocr_details import Palabra, Linea, Parrafo
+from domain.entities.forensic_ocr_details import Palabra, Linea, Bloque, BBox
 
 
 class AlignmentAnalyzer:
@@ -56,9 +56,9 @@ class AlignmentAnalyzer:
             # Extraer elementos de texto del resultado OCR
             palabras = self._extract_words_from_ocr(ocr_result)
             lineas = self._extract_lines_from_ocr(ocr_result)
-            parrafos = self._extract_paragraphs_from_ocr(ocr_result)
+            bloques = self._extract_blocks_from_ocr(ocr_result)
             
-            if not palabras and not lineas and not parrafos:
+            if not palabras and not lineas and not bloques:
                 return {
                     "error": "No se encontraron elementos de texto para analizar",
                     "elementos_analizados": 0,
@@ -71,17 +71,17 @@ class AlignmentAnalyzer:
             # Analizar alineación de líneas
             line_alignment = self._analyze_line_alignment(lineas)
             
-            # Analizar alineación de párrafos
-            paragraph_alignment = self._analyze_paragraph_alignment(parrafos)
+            # Analizar alineación de bloques
+            block_alignment = self._analyze_block_alignment(bloques)
             
             # Combinar análisis
             combined_analysis = self._combine_alignment_analysis(
-                word_alignment, line_alignment, paragraph_alignment
+                word_alignment, line_alignment, block_alignment
             )
             
             # Detectar indicadores sospechosos
             suspicious_indicators = self._detect_suspicious_alignment(
-                combined_analysis, palabras, lineas, parrafos
+                combined_analysis, palabras, lineas, bloques
             )
             
             return {
@@ -94,7 +94,7 @@ class AlignmentAnalyzer:
                 "suspicious_indicators": suspicious_indicators,
                 "word_analysis": word_alignment,
                 "line_analysis": line_alignment,
-                "paragraph_analysis": paragraph_alignment
+                "block_analysis": block_alignment
             }
             
         except Exception as e:
@@ -140,21 +140,72 @@ class AlignmentAnalyzer:
             pass
         return lineas
     
-    def _extract_paragraphs_from_ocr(self, ocr_result: Dict[str, Any]) -> List[Parrafo]:
-        """Extrae párrafos del resultado OCR"""
-        parrafos = []
+    def _extract_blocks_from_ocr(self, ocr_result: Dict[str, Any]) -> List[Bloque]:
+        """Extrae bloques del resultado OCR"""
+        bloques = []
         try:
-            if "parrafos" in ocr_result:
-                for parrafo_data in ocr_result["parrafos"]:
-                    parrafo = Parrafo(
-                        texto=parrafo_data.get("texto", ""),
-                        confianza=parrafo_data.get("confianza", 0.0),
-                        bbox=parrafo_data.get("bbox", [0, 0, 0, 0])
+            if "bloques" in ocr_result:
+                for bloque_data in ocr_result["bloques"]:
+                    # Crear BBox desde la lista
+                    bbox_data = bloque_data.get("bbox", [0, 0, 0, 0])
+                    bbox = BBox(
+                        x=bbox_data[0],
+                        y=bbox_data[1], 
+                        w=bbox_data[2] - bbox_data[0],
+                        h=bbox_data[3] - bbox_data[1]
                     )
-                    parrafos.append(parrafo)
+                    
+                    # Extraer líneas del bloque
+                    lineas = []
+                    for linea_data in bloque_data.get("lineas", []):
+                        linea_bbox_data = linea_data.get("bbox", [0, 0, 0, 0])
+                        linea_bbox = BBox(
+                            x=linea_bbox_data[0],
+                            y=linea_bbox_data[1],
+                            w=linea_bbox_data[2] - linea_bbox_data[0],
+                            h=linea_bbox_data[3] - linea_bbox_data[1]
+                        )
+                        
+                        # Extraer palabras de la línea
+                        palabras = []
+                        for palabra_data in linea_data.get("palabras", []):
+                            palabra_bbox_data = palabra_data.get("bbox", [0, 0, 0, 0])
+                            palabra_bbox = BBox(
+                                x=palabra_bbox_data[0],
+                                y=palabra_bbox_data[1],
+                                w=palabra_bbox_data[2] - palabra_bbox_data[0],
+                                h=palabra_bbox_data[3] - palabra_bbox_data[1]
+                            )
+                            
+                            palabra = Palabra(
+                                bbox=palabra_bbox,
+                                confidence=palabra_data.get("confianza", 0.0),
+                                texto=palabra_data.get("texto", ""),
+                                font_family=palabra_data.get("font_family"),
+                                font_size=palabra_data.get("font_size"),
+                                font_style=palabra_data.get("font_style"),
+                                font_weight=palabra_data.get("font_weight")
+                            )
+                            palabras.append(palabra)
+                        
+                        linea = Linea(
+                            bbox=linea_bbox,
+                            confidence=linea_data.get("confianza", 0.0),
+                            texto=linea_data.get("texto", ""),
+                            palabras=palabras
+                        )
+                        lineas.append(linea)
+                    
+                    bloque = Bloque(
+                        bbox=bbox,
+                        confidence=bloque_data.get("confianza", 0.0),
+                        lang=bloque_data.get("lang", "es"),
+                        lineas=lineas
+                    )
+                    bloques.append(bloque)
         except Exception:
             pass
-        return parrafos
+        return bloques
     
     def _analyze_word_alignment(self, palabras: List[Palabra]) -> Dict[str, Any]:
         """Analiza la alineación de palabras"""
@@ -224,31 +275,33 @@ class AlignmentAnalyzer:
             "misaligned": misaligned
         }
     
-    def _analyze_paragraph_alignment(self, parrafos: List[Parrafo]) -> Dict[str, Any]:
-        """Analiza la alineación de párrafos"""
-        if not parrafos:
+    def _analyze_block_alignment(self, bloques: List[Bloque]) -> Dict[str, Any]:
+        """Analiza la alineación de bloques"""
+        if not bloques:
             return {"elements": 0, "is_aligned": True, "deviation": 0.0, "alignments": []}
         
         alignments = []
         deviations = []
         misaligned = []
         
-        for parrafo in parrafos:
-            # Calcular alineación del párrafo
-            para_alignment = self._calculate_paragraph_alignment(parrafo)
-            alignments.append(para_alignment["type"])
-            deviations.append(para_alignment["deviation"])
+        for bloque in bloques:
+            # Calcular alineación del bloque
+            block_alignment = self._calculate_block_alignment(bloque)
+            alignments.append(block_alignment["type"])
+            deviations.append(block_alignment["deviation"])
             
-            if para_alignment["deviation"] > self.alignment_thresholds["acceptable"]:
+            if block_alignment["deviation"] > self.alignment_thresholds["acceptable"]:
+                # Obtener texto del bloque desde las líneas
+                bloque_texto = " ".join([linea.texto for linea in bloque.lineas])
                 misaligned.append({
-                    "type": "paragraph",
-                    "text": parrafo.texto[:50] + "..." if len(parrafo.texto) > 50 else parrafo.texto,
-                    "deviation": para_alignment["deviation"],
-                    "alignment": para_alignment["type"]
+                    "type": "block",
+                    "text": bloque_texto[:50] + "..." if len(bloque_texto) > 50 else bloque_texto,
+                    "deviation": block_alignment["deviation"],
+                    "alignment": block_alignment["type"]
                 })
         
         return {
-            "elements": len(parrafos),
+            "elements": len(bloques),
             "is_aligned": len(misaligned) == 0,
             "deviation": statistics.mean(deviations) if deviations else 0.0,
             "alignments": alignments,
@@ -261,20 +314,20 @@ class AlignmentAnalyzer:
             return []
         
         # Ordenar palabras por coordenada Y
-        sorted_words = sorted(palabras, key=lambda w: w.bbox[1])
+        sorted_words = sorted(palabras, key=lambda w: w.bbox.y)
         
         lines = []
         current_line = [sorted_words[0]]
-        current_y = sorted_words[0].bbox[1]
+        current_y = sorted_words[0].bbox.y
         
         for palabra in sorted_words[1:]:
             # Si la diferencia en Y es pequeña, es la misma línea
-            if abs(palabra.bbox[1] - current_y) < 10:  # 10 píxeles de tolerancia
+            if abs(palabra.bbox.y - current_y) < 10:  # 10 píxeles de tolerancia
                 current_line.append(palabra)
             else:
                 lines.append(current_line)
                 current_line = [palabra]
-                current_y = palabra.bbox[1]
+                current_y = palabra.bbox.y
         
         lines.append(current_line)
         return lines
@@ -285,7 +338,7 @@ class AlignmentAnalyzer:
             return {"type": "single", "deviation": 0.0}
         
         # Obtener coordenadas Y de las palabras
-        y_coords = [w.bbox[1] for w in words]
+        y_coords = [w.bbox.y for w in words]
         
         # Calcular desviación estándar de las coordenadas Y
         deviation = statistics.stdev(y_coords) if len(y_coords) > 1 else 0.0
@@ -304,14 +357,17 @@ class AlignmentAnalyzer:
         
         return {"type": alignment_type, "deviation": deviation}
     
-    def _calculate_paragraph_alignment(self, parrafo: Parrafo) -> Dict[str, Any]:
-        """Calcula la alineación de un párrafo"""
-        # Para párrafos, analizamos la consistencia de la línea base
-        bbox = parrafo.bbox
-        height = bbox[3] - bbox[1]
+    def _calculate_block_alignment(self, bloque: Bloque) -> Dict[str, Any]:
+        """Calcula la alineación de un bloque"""
+        # Para bloques, analizamos la consistencia de las líneas dentro del bloque
+        if not bloque.lineas:
+            return {"type": "single", "deviation": 0.0}
         
-        # Calcular desviación basada en la altura del párrafo
-        deviation = height * 0.1  # 10% de la altura como desviación base
+        # Obtener coordenadas Y de las líneas del bloque
+        y_coords = [linea.bbox.y for linea in bloque.lineas]
+        
+        # Calcular desviación estándar de las coordenadas Y
+        deviation = statistics.stdev(y_coords) if len(y_coords) > 1 else 0.0
         
         # Determinar tipo de alineación
         if deviation <= self.alignment_thresholds["perfect"]:
@@ -328,11 +384,11 @@ class AlignmentAnalyzer:
         return {"type": alignment_type, "deviation": deviation}
     
     def _combine_alignment_analysis(self, word_analysis: Dict, line_analysis: Dict, 
-                                  paragraph_analysis: Dict) -> Dict[str, Any]:
+                                  block_analysis: Dict) -> Dict[str, Any]:
         """Combina los análisis de alineación"""
         total_elements = (word_analysis["elements"] + 
                          line_analysis["elements"] + 
-                         paragraph_analysis["elements"])
+                         block_analysis["elements"])
         
         # Calcular desviación promedio ponderada
         total_deviation = 0.0
@@ -346,9 +402,9 @@ class AlignmentAnalyzer:
             total_deviation += line_analysis["deviation"] * line_analysis["elements"]
             total_weight += line_analysis["elements"]
         
-        if paragraph_analysis["elements"] > 0:
-            total_deviation += paragraph_analysis["deviation"] * paragraph_analysis["elements"]
-            total_weight += paragraph_analysis["elements"]
+        if block_analysis["elements"] > 0:
+            total_deviation += block_analysis["deviation"] * block_analysis["elements"]
+            total_weight += block_analysis["elements"]
         
         average_deviation = total_deviation / total_weight if total_weight > 0 else 0.0
         
@@ -356,27 +412,27 @@ class AlignmentAnalyzer:
         is_aligned = (average_deviation <= self.alignment_thresholds["acceptable"] and
                      len(word_analysis["misaligned"]) == 0 and
                      len(line_analysis["misaligned"]) == 0 and
-                     len(paragraph_analysis["misaligned"]) == 0)
+                     len(block_analysis["misaligned"]) == 0)
         
         # Combinar alineaciones detectadas
         detected_alignments = list(set(
             word_analysis["alignments"] + 
             line_analysis["alignments"] + 
-            paragraph_analysis["alignments"]
+            block_analysis["alignments"]
         ))
         
         # Combinar desviaciones por elemento
         deviations_per_element = (
             word_analysis["deviations"] if "deviations" in word_analysis else [] +
             line_analysis["deviations"] if "deviations" in line_analysis else [] +
-            paragraph_analysis["deviations"] if "deviations" in paragraph_analysis else []
+            block_analysis["deviations"] if "deviations" in block_analysis else []
         )
         
         # Combinar elementos mal alineados
         misaligned_elements = (
             word_analysis["misaligned"] + 
             line_analysis["misaligned"] + 
-            paragraph_analysis["misaligned"]
+            block_analysis["misaligned"]
         )
         
         return {
@@ -389,7 +445,7 @@ class AlignmentAnalyzer:
         }
     
     def _detect_suspicious_alignment(self, combined_analysis: Dict, palabras: List[Palabra], 
-                                   lineas: List[Linea], parrafos: List[Parrafo]) -> List[str]:
+                                   lineas: List[Linea], bloques: List[Bloque]) -> List[str]:
         """Detecta indicadores sospechosos en la alineación"""
         indicators = []
         
@@ -406,7 +462,7 @@ class AlignmentAnalyzer:
             indicators.append("Múltiples tipos de alineación detectados - posible manipulación")
         
         # Verificar rotaciones extrañas
-        rotated_elements = self._detect_rotated_elements(palabras, lineas, parrafos)
+        rotated_elements = self._detect_rotated_elements(palabras, lineas, bloques)
         if rotated_elements:
             indicators.append(f"{len(rotated_elements)} elementos con rotación extraña detectados")
         
@@ -419,13 +475,15 @@ class AlignmentAnalyzer:
         return indicators
     
     def _detect_rotated_elements(self, palabras: List[Palabra], lineas: List[Linea], 
-                               parrafos: List[Parrafo]) -> List[Dict[str, Any]]:
+                               bloques: List[Bloque]) -> List[Dict[str, Any]]:
         """Detecta elementos con rotación extraña"""
         rotated = []
         
         # Analizar palabras
         for palabra in palabras:
-            rotation = self._calculate_rotation(palabra.bbox)
+            rotation = self._calculate_rotation([palabra.bbox.x, palabra.bbox.y, 
+                                               palabra.bbox.x + palabra.bbox.w, 
+                                               palabra.bbox.y + palabra.bbox.h])
             if abs(rotation) > self.rotation_thresholds["slight"]:
                 rotated.append({
                     "type": "word",
@@ -435,7 +493,9 @@ class AlignmentAnalyzer:
         
         # Analizar líneas
         for linea in lineas:
-            rotation = self._calculate_rotation(linea.bbox)
+            rotation = self._calculate_rotation([linea.bbox.x, linea.bbox.y, 
+                                               linea.bbox.x + linea.bbox.w, 
+                                               linea.bbox.y + linea.bbox.h])
             if abs(rotation) > self.rotation_thresholds["slight"]:
                 rotated.append({
                     "type": "line",
@@ -443,13 +503,17 @@ class AlignmentAnalyzer:
                     "rotation": rotation
                 })
         
-        # Analizar párrafos
-        for parrafo in parrafos:
-            rotation = self._calculate_rotation(parrafo.bbox)
+        # Analizar bloques
+        for bloque in bloques:
+            rotation = self._calculate_rotation([bloque.bbox.x, bloque.bbox.y, 
+                                               bloque.bbox.x + bloque.bbox.w, 
+                                               bloque.bbox.y + bloque.bbox.h])
             if abs(rotation) > self.rotation_thresholds["slight"]:
+                # Obtener texto del bloque desde las líneas
+                bloque_texto = " ".join([linea.texto for linea in bloque.lineas])
                 rotated.append({
-                    "type": "paragraph",
-                    "text": parrafo.texto[:50] + "..." if len(parrafo.texto) > 50 else parrafo.texto,
+                    "type": "block",
+                    "text": bloque_texto[:50] + "..." if len(bloque_texto) > 50 else bloque_texto,
                     "rotation": rotation
                 })
         
