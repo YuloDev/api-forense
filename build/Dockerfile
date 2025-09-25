@@ -30,7 +30,7 @@ RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel
 WORKDIR /app
 
 # Instalar dependencias de Python primero para aprovechar cache
-COPY requerimientos.txt ./requirements.txt
+COPY requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Las dependencias ya están instaladas y verificadas
@@ -46,7 +46,8 @@ ENV UVICORN_HOST=0.0.0.0 \
     RENDER_DPI=250 \
     MAX_PDF_BYTES=10485760 \
     SRI_TIMEOUT=12 \
-    TEXT_MIN_LEN_FOR_DOC=50
+    TEXT_MIN_LEN_FOR_DOC=50 \
+    AWS_DEFAULT_REGION=us-east-1
 
 EXPOSE 8000
 
