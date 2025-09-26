@@ -3,6 +3,7 @@ from domain.entities.ocr_text import OCRText
 from domain.ports.ocr_service import OCRServicePort
 from adapters.persistence.helpers.FacturaHelpers.factura_parser import FacturaParser
 from adapters.persistence.helpers.RecetaHelpers.receta_parser import extract_receta_data
+from adapters.persistence.helpers.LaboratorioHelpers.laboratorio_parser import extract_laboratorio_data
 
 
 class ValidateOCRTextUseCase:
@@ -28,13 +29,17 @@ class ValidateOCRTextUseCase:
                 "confidence_percentage": ocr_text.get_confidence_percentage()
             }
             
-            # Si es una factura o receta, parsear los detalles
+            # Si es una factura, receta o laboratorio, parsear los detalles
             if tipo.lower() == "factura":
                 detalle = self._parse_factura_details(ocr_text.get_clean_text())
                 if detalle:
                     result["detalle"] = detalle
             elif tipo.lower() == "receta":
                 detalle = self._parse_receta_details(ocr_text.get_clean_text())
+                if detalle:
+                    result["detalle"] = detalle
+            elif tipo.lower() == "laboratorio":
+                detalle = self._parse_laboratorio_details(ocr_text.get_clean_text())
                 if detalle:
                     result["detalle"] = detalle
             
@@ -78,13 +83,17 @@ class ValidateOCRTextUseCase:
                 "confidence_percentage": round(avg_confidence, 2)
             }
             
-            # Si es una factura o receta, parsear los detalles
+            # Si es una factura, receta o laboratorio, parsear los detalles
             if tipo.lower() == "factura":
                 detalle = self._parse_factura_details(combined_text_normalized)
                 if detalle:
                     result["detalle"] = detalle
             elif tipo.lower() == "receta":
                 detalle = self._parse_receta_details(combined_text_normalized)
+                if detalle:
+                    result["detalle"] = detalle
+            elif tipo.lower() == "laboratorio":
+                detalle = self._parse_laboratorio_details(combined_text_normalized)
                 if detalle:
                     result["detalle"] = detalle
             
@@ -118,4 +127,15 @@ class ValidateOCRTextUseCase:
             return None
         except Exception as e:
             print(f"Error parseando detalles de receta: {e}")
+            return None
+    
+    def _parse_laboratorio_details(self, text: str) -> Optional[Dict[str, Any]]:
+        """Parsea los detalles de un formulario de laboratorio desde el texto OCR"""
+        try:
+            detalle_laboratorio = extract_laboratorio_data(text)
+            if detalle_laboratorio:
+                return detalle_laboratorio
+            return None
+        except Exception as e:
+            print(f"Error parseando detalles de laboratorio: {e}")
             return None
