@@ -35,7 +35,7 @@ async def extract_image_text(request: ImageOCRRequest) -> JSONResponse:
     El parámetro 'tipo' puede ser: imagen, laboratorio, otros
     """
     try:
-        result = validate_ocr_use_case.execute_image(request.image_base64)
+        result = validate_ocr_use_case.execute_image(request.image_base64, request.tipo)
         
         # Agregar el tipo a la respuesta
         if result["success"]:
@@ -44,14 +44,21 @@ async def extract_image_text(request: ImageOCRRequest) -> JSONResponse:
         if not result["success"]:
             raise HTTPException(status_code=400, detail=result["error"])
         
+        response_content = {
+            "success": True,
+            "text_raw": result["text_raw"],
+            "text_normalized": result["text_normalized"],
+            "confidence_percentage": result["confidence_percentage"],
+            "tipo": result.get("tipo", "imagen")
+        }
+        
+        # Agregar detalle si está presente (para facturas)
+        if "detalle" in result:
+            response_content["detalle"] = result["detalle"]
+        
         return JSONResponse(
             status_code=200,
-            content={
-                "success": True,
-                "text_raw": result["text_raw"],
-                "text_normalized": result["text_normalized"],
-                "tipo": result.get("tipo", "imagen")
-            }
+            content=response_content
         )
         
     except HTTPException:
@@ -63,7 +70,8 @@ async def extract_image_text(request: ImageOCRRequest) -> JSONResponse:
                 "success": False,
                 "error": str(e),
                 "text_raw": "",
-                "text_normalized": ""
+                "text_normalized": "",
+                "confidence_percentage": 0.0
             }
         )
 
@@ -75,7 +83,7 @@ async def extract_text(request: TextOCRRequest) -> JSONResponse:
     El parámetro 'tipo' puede ser: pdf, laboratorio, otros
     """
     try:
-        result = validate_ocr_use_case.execute_pdf(request.text_base64)
+        result = validate_ocr_use_case.execute_pdf(request.text_base64, request.tipo)
         
         # Agregar el tipo a la respuesta
         if result["success"]:
@@ -84,14 +92,21 @@ async def extract_text(request: TextOCRRequest) -> JSONResponse:
         if not result["success"]:
             raise HTTPException(status_code=400, detail=result["error"])
         
+        response_content = {
+            "success": True,
+            "text_raw": result["text_raw"],
+            "text_normalized": result["text_normalized"],
+            "confidence_percentage": result["confidence_percentage"],
+            "tipo": result.get("tipo", "pdf")
+        }
+        
+        # Agregar detalle si está presente (para facturas)
+        if "detalle" in result:
+            response_content["detalle"] = result["detalle"]
+        
         return JSONResponse(
             status_code=200,
-            content={
-                "success": True,
-                "text_raw": result["text_raw"],
-                "text_normalized": result["text_normalized"],
-                "tipo": result.get("tipo", "pdf")
-            }
+            content=response_content
         )
         
     except HTTPException:
@@ -103,7 +118,8 @@ async def extract_text(request: TextOCRRequest) -> JSONResponse:
                 "success": False,
                 "error": str(e),
                 "text_raw": "",
-                "text_normalized": ""
+                "text_normalized": "",
+                "confidence_percentage": 0.0
             }
         )
 

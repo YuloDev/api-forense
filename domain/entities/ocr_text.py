@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from datetime import datetime
 
 
@@ -13,8 +13,9 @@ class OCRText:
     language: str
     processing_time: float
     created_at: datetime
-    source_type: str  # 'image' o 'pdf'
+    source_type: str  # 'image', 'pdf', o 'pdf_scanned'
     page_number: Optional[int] = None  # Para PDFs
+    metadata: Optional[Dict[str, Any]] = None  # Metadatos adicionales
     
     def is_valid(self) -> bool:
         """Valida si el texto OCR es válido"""
