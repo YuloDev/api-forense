@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  api-forense-test:
+    build:
+      context: .
+      dockerfile: build/Dockerfile
+    container_name: api-forense-test-container
+    ports:
+      - "9005:8000"
+    environment:
+      - UVICORN_HOST=0.0.0.0
+      - UVICORN_PORT=8000
+      - EASYOCR_GPU=false
+      - EASYOCR_LANGS=es,en
+      - RENDER_DPI=250
+      - MAX_PDF_BYTES=10485760
+      - SRI_TIMEOUT=12
+      - TEXT_MIN_LEN_FOR_DOC=50
+      # AWS Configuration (usar archivo .env o definir aquí)
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
+    volumes:
+      # Volumen para archivos temporales y logs
+      - ./temp:/app/temp
+      - ./logs:/app/logs
+      # Volumen para configuración local (opcional)
+      - ./config:/app/config
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - api-forense-network
+
+networks:
+  api-forense-network:
+    driver: bridge
+
+# Opcional: Si necesitas persistencia de datos
+volumes:
+  api-forense-data:
+    driver: local
